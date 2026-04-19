@@ -71,8 +71,9 @@ app.post('/api/setup', async (req, res) => {
     });
 
     res.json({ message: 'Setup complete', admin });
-  } catch (error) {
-    res.status(500).json({ error: 'Setup failed' });
+  } catch (error: any) {
+    console.error('Setup error:', error);
+    res.status(500).json({ error: 'Setup failed', details: error.message });
   }
 });
 
@@ -111,9 +112,9 @@ app.post('/api/auth/login', async (req, res) => {
         schoolId: user.schoolId
       }
     });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'Login failed' });
+  } catch (error: any) {
+    console.error('Login error:', error);
+    res.status(500).json({ error: 'Login failed', details: error.message });
   }
 });
 
