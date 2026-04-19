@@ -16,8 +16,9 @@ export default function Login() {
     try {
       await api.post('/setup');
       alert('Mock user created! You can now login.');
-    } catch (err) {
-      alert('Setup might already be done or failed.');
+    } catch (err: any) {
+      const details = err.response?.data?.details;
+      alert(`Setup might already be done or failed.\n\nBackend details: ${details || 'None'}`);
     }
   };
 
@@ -30,7 +31,9 @@ export default function Login() {
       login(res.data.user, res.data.token);
       navigate('/dashboard');
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Invalid credentials');
+      const details = err.response?.data?.details;
+      const errorMsg = err.response?.data?.error || 'Invalid credentials';
+      setError(details ? `${errorMsg}: ${details}` : errorMsg);
     } finally {
       setLoading(false);
     }
