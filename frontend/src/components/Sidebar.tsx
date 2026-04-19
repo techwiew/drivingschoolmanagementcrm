@@ -6,8 +6,7 @@ import {
   Calendar, 
   CreditCard, 
   FileText, 
-  LogOut,
-  Settings
+  LogOut
 } from 'lucide-react';
 
 export default function Sidebar() {

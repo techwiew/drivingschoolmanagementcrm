@@ -1,5 +1,5 @@
 import { useAuthStore } from '../store/authStore';
-import { Users, CreditCard, Calendar, TrendingUp } from 'lucide-react';
+import { Users, Calendar, TrendingUp } from 'lucide-react';
 
 export default function AdminDashboard() {
   const { user } = useAuthStore();
