@@ -12,8 +12,7 @@ router.get('/', async (req, res) => {
       include: {
         questions: true,
         results: true
-      },
-      orderBy: { createdAt: 'desc' }
+      }
     });
     res.json(tests);
   } catch (error) {
@@ -30,8 +29,6 @@ router.post('/', async (req, res) => {
       data: {
         schoolId: req.user.schoolId,
         title,
-        description,
-        passingScore: parseInt(passingScore) || 80,
         timeLimitMinutes: parseInt(timeLimitMinutes) || 60
       }
     });

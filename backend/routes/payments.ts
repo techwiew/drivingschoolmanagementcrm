@@ -21,8 +21,7 @@ router.get('/', async (req, res) => {
       where: whereClause,
       include: {
         student: { include: { user: true } }
-      },
-      orderBy: { paymentDate: 'desc' }
+      }
     });
     
     res.json(payments);
@@ -42,9 +41,8 @@ router.post('/', async (req, res) => {
         schoolId: req.user.schoolId,
         studentId,
         amount: parseFloat(amount),
-        method,
         status: status || 'COMPLETED',
-        paymentDate: new Date()
+        dueDate: new Date()
       },
       include: { student: { include: { user: true } } }
     });
