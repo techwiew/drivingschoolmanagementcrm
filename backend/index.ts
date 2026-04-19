@@ -76,9 +76,7 @@ app.post('/api/setup', async (req, res) => {
     res.status(500).json({ error: 'Setup failed', details: error.message });
   }
 });
-
-
-  app.post('/api/auth/login', async (req, res) => {
+app.post('/api/auth/login', async (req, res) => {
   try {
     const { email, password } = req.body;
     const user = await prisma.user.findUnique({
@@ -113,7 +111,7 @@ app.post('/api/setup', async (req, res) => {
         schoolId: user.schoolId
       }
     });
-    } catch (error: any) {
+  } catch (error: any) {
     console.error('Login error:', error);
     res.status(500).json({ error: 'Login failed', details: error.message });
   }
