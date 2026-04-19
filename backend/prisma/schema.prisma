@@ -1,0 +1,159 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model School {
+  id            String          @id @default(uuid())
+  name          String
+  contactEmail  String
+  createdAt     DateTime        @default(now())
+  users         User[]
+  courses       Course[]
+  classes       ClassSchedule[]
+  payments      Payment[]
+  mockTests     MockTest[]
+}
+
+model User {
+  id            String          @id @default(uuid())
+  schoolId      String
+  email         String          @unique
+  passwordHash  String
+  role          Role
+  firstName     String
+  lastName      String
+  status        UserStatus      @default(ACTIVE)
+  createdAt     DateTime        @default(now())
+  school        School          @relation(fields: [schoolId], references: [id])
+  studentProfile StudentProfile?
+  trainerProfile TrainerProfile?
+}
+
+enum Role {
+  ADMIN
+  STUDENT
+  TRAINER
+}
+
+enum UserStatus {
+  ACTIVE
+  LOCKED
+}
+
+model StudentProfile {
+  id               String       @id @default(uuid())
+  userId           String       @unique
+  licenseStatus    String       @default("Pending")
+  totalPaid        Float        @default(0)
+  balanceDue       Float        @default(0)
+  user             User         @relation(fields: [userId], references: [id])
+  attendances      Attendance[]
+  payments         Payment[]
+  testResults      TestResult[]
+}
+
+model TrainerProfile {
+  id                 String          @id @default(uuid())
+  userId             String          @unique
+  availabilityStatus String          @default("Available")
+  user               User            @relation(fields: [userId], references: [id])
+  classes            ClassSchedule[]
+}
+
+model Course {
+  id           String          @id @default(uuid())
+  schoolId     String
+  title        String
+  description  String?
+  durationDays Int
+  price        Float
+  school       School          @relation(fields: [schoolId], references: [id])
+  classes      ClassSchedule[]
+}
+
+model ClassSchedule {
+  id           String       @id @default(uuid())
+  schoolId     String
+  courseId     String
+  trainerId    String
+  startTime    DateTime
+  endTime      DateTime
+  status       ClassStatus  @default(SCHEDULED)
+  school       School       @relation(fields: [schoolId], references: [id])
+  course       Course       @relation(fields: [courseId], references: [id])
+  trainer      TrainerProfile @relation(fields: [trainerId], references: [id])
+  attendances  Attendance[]
+}
+
+enum ClassStatus {
+  SCHEDULED
+  COMPLETED
+  CANCELLED
+}
+
+model Attendance {
+  id           String       @id @default(uuid())
+  scheduleId   String
+  studentId    String
+  status       AttStatus
+  markedBy     String
+  schedule     ClassSchedule @relation(fields: [scheduleId], references: [id])
+  student      StudentProfile @relation(fields: [studentId], references: [id])
+}
+
+enum AttStatus {
+  PRESENT
+  ABSENT
+}
+
+model Payment {
+  id           String        @id @default(uuid())
+  schoolId     String
+  studentId    String
+  amount       Float
+  status       PaymentStatus @default(PENDING)
+  proofUrl     String?
+  dueDate      DateTime?
+  school       School        @relation(fields: [schoolId], references: [id])
+  student      StudentProfile @relation(fields: [studentId], references: [id])
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+}
+
+model MockTest {
+  id               String       @id @default(uuid())
+  schoolId         String
+  title            String
+  timeLimitMinutes Int          @default(30)
+  school           School       @relation(fields: [schoolId], references: [id])
+  questions        Question[]
+  results          TestResult[]
+}
+
+model Question {
+  id            String     @id @default(uuid())
+  testId        String
+  text          String
+  options       String     // JSON string
+  correctAnswer String
+  test          MockTest   @relation(fields: [testId], references: [id])
+}
+
+model TestResult {
+  id           String         @id @default(uuid())
+  testId       String
+  studentId    String
+  score        Int
+  attemptedAt  DateTime       @default(now())
+  test         MockTest       @relation(fields: [testId], references: [id])
+  student      StudentProfile @relation(fields: [studentId], references: [id])
+}

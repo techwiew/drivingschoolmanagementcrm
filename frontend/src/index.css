@@ -1,0 +1,16 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #10b981; /* Emerald 500 */
+  --color-primary-hover: #059669; /* Emerald 600 */
+  --color-secondary: #3b82f6; /* Blue 500 */
+  --color-dark: #1f2937; /* Gray 800 */
+  --color-light: #f3f4f6; /* Gray 100 */
+  --font-sans: 'Inter', system-ui, sans-serif;
+}
+
+body {
+  background-color: var(--color-light);
+  color: var(--color-dark);
+  font-family: var(--font-sans);
+}
