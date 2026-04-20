@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "mysql"
   url      = env("DATABASE_URL")
 }
 
@@ -27,11 +27,15 @@ model User {
   role           Role
   firstName      String
   lastName       String
+  phone          String?
+  location       String?
+  dateOfBirth    DateTime?
   status         UserStatus      @default(ACTIVE)
   createdAt      DateTime        @default(now())
   school         School          @relation(fields: [schoolId], references: [id])
   studentProfile StudentProfile?
   trainerProfile TrainerProfile?
+  documents      Document[]
 }
 
 enum Role {
@@ -162,4 +166,16 @@ model TestResult {
   attemptedAt DateTime       @default(now())
   test        MockTest       @relation(fields: [testId], references: [id])
   student     StudentProfile @relation(fields: [studentId], references: [id])
+}
+
+model Document {
+  id           String   @id @default(uuid())
+  userId       String
+  fileName     String
+  fileType     String
+  fileSize     Int
+  fileUrl      String
+  remark       String?
+  uploadedAt   DateTime @default(now())
+  user         User     @relation(fields: [userId], references: [id])
 }

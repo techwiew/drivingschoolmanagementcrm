@@ -4,6 +4,10 @@ import dotenv from 'dotenv';
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
+import multer from 'multer';
+import path from 'path';
+import helmet from 'helmet';
+import compression from 'compression';
 import scheduleRouter from './routes/schedule';
 import paymentRouter from './routes/payments';
 import mockTestRouter from './routes/mockTests';
@@ -15,8 +19,29 @@ const prisma = new PrismaClient();
 const PORT = process.env.PORT || 5000;
 const JWT_SECRET = process.env.JWT_SECRET || 'driveflow-secret-2024';
 
+app.use(helmet());
+app.use(compression());
 app.use(cors());
 app.use(express.json());
+// Serve static frontend in production
+if (process.env.NODE_ENV === 'production') {
+  app.use(express.static(path.join(__dirname, '../frontend/dist')));
+}
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+// Configure Multer
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, 'uploads/');
+  },
+  filename: (req, file, cb) => {
+    cb(null, Date.now() + '-' + file.originalname.replace(/\s+/g, '_'));
+  }
+});
+const upload = multer({ 
+  storage, 
+  limits: { fileSize: 1024 * 1024 } // 1MB limit
+});
 
 // Extend Express Request to include user
 declare global {
@@ -263,7 +288,8 @@ app.get('/api/users', async (req, res) => {
   try {
     const users = await prisma.user.findMany({
       where: { schoolId: req.user.schoolId },
-      select: { id: true, email: true, firstName: true, lastName: true, role: true, status: true, createdAt: true }
+      select: { id: true, email: true, firstName: true, lastName: true, role: true, status: true, phone: true, location: true, dateOfBirth: true, createdAt: true },
+      orderBy: { createdAt: 'desc' }
     });
     res.json(users);
   } catch (error) {
@@ -271,10 +297,9 @@ app.get('/api/users', async (req, res) => {
   }
 });
 
-// Create a new user (Student/Trainer)
-app.post('/api/users', async (req, res) => {
+app.post('/api/users', upload.array('documents', 4), async (req, res) => {
   try {
-    const { email, password, firstName, lastName, role } = req.body;
+    const { email, password, firstName, lastName, role, phone, location, dateOfBirth } = req.body;
     const hashedPassword = await bcrypt.hash(password, 10);
 
     const user = await prisma.user.create({
@@ -284,7 +309,10 @@ app.post('/api/users', async (req, res) => {
         passwordHash: hashedPassword,
         firstName,
         lastName,
-        role
+        role,
+        phone,
+        location,
+        dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null
       }
     });
 
@@ -295,10 +323,41 @@ app.post('/api/users', async (req, res) => {
       await prisma.trainerProfile.create({ data: { userId: user.id } });
     }
 
+    // Process documents
+    if (req.files && Array.isArray(req.files)) {
+      for (let i = 0; i < req.files.length; i++) {
+        const file = req.files[i];
+        const remark = req.body[`remark_${i}`] || null;
+        
+        await prisma.document.create({
+          data: {
+            userId: user.id,
+            fileName: file.originalname,
+            fileType: file.mimetype,
+            fileSize: file.size,
+            fileUrl: `/uploads/${file.filename}`,
+            remark
+          }
+        });
+      }
+    }
+
     res.json({ message: 'User created successfully', user: { id: user.id, email: user.email } });
   } catch (error: any) {
     console.error(error);
     res.status(500).json({ error: 'Failed to create user', details: error.message });
+  }
+});
+
+// Get user documents
+app.get('/api/users/:id/documents', async (req, res) => {
+  try {
+    const documents = await prisma.document.findMany({
+      where: { userId: req.params.id }
+    });
+    res.json(documents);
+  } catch (error: any) {
+    res.status(500).json({ error: 'Failed to fetch documents', details: error.message });
   }
 });
 
@@ -368,6 +427,13 @@ app.get('/api/profile', async (req, res) => {
 app.use('/api/schedules', scheduleRouter);
 app.use('/api/payments', paymentRouter);
 app.use('/api/mock-tests', mockTestRouter);
+
+// Catch-all for React router in production
+if (process.env.NODE_ENV === 'production') {
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, '../frontend/dist/index.html'));
+  });
+}
 
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
