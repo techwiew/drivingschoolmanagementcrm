@@ -390,12 +390,13 @@ app.get('/api/profile', async (req, res) => {
 app.use('/api/schedules', schedule_1.default);
 app.use('/api/payments', payments_1.default);
 app.use('/api/mock-tests', mockTests_1.default);
-// Catch-all for React router in production
-if (process.env.NODE_ENV === 'production') {
-    app.get('*', (req, res) => {
-        res.sendFile(path_1.default.join(__dirname, '../frontend/dist/index.html'));
+// 404 Fallback for unmatched routes
+app.use((req, res) => {
+    res.status(404).json({
+        success: false,
+        message: "Route not found"
     });
-}
+});
 app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
 });
