@@ -25,6 +25,13 @@ app.use((0, helmet_1.default)());
 app.use((0, compression_1.default)());
 app.use((0, cors_1.default)());
 app.use(express_1.default.json());
+// Handle Vercel-style routing locally and on cPanel
+app.use((req, res, next) => {
+    if (req.url.startsWith('/_/backend/api')) {
+        req.url = req.url.replace('/_/backend/api', '/api');
+    }
+    next();
+});
 // Serve static frontend in production
 if (process.env.NODE_ENV === 'production') {
     app.use(express_1.default.static(path_1.default.join(__dirname, '../frontend/dist')));
