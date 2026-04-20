@@ -1,39 +1,43 @@
 import { NavLink } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
-import { 
-  LayoutDashboard, 
-  Users, 
-  Calendar, 
-  CreditCard, 
-  FileText, 
-  LogOut
+import {
+  LayoutDashboard,
+  Users,
+  Calendar,
+  CreditCard,
+  FileText,
+  LogOut,
+  ClipboardList
 } from 'lucide-react';
 
 export default function Sidebar() {
   const { user, logout } = useAuthStore();
 
   const getNavItems = () => {
-    switch(user?.role) {
+    switch (user?.role) {
       case 'ADMIN':
         return [
           { name: 'Dashboard', path: '/dashboard', icon: <LayoutDashboard size={20} /> },
           { name: 'Users', path: '/users', icon: <Users size={20} /> },
           { name: 'Schedule', path: '/schedule', icon: <Calendar size={20} /> },
+          { name: 'Attendance', path: '/attendance', icon: <ClipboardList size={20} /> },
           { name: 'Payments', path: '/payments', icon: <CreditCard size={20} /> },
           { name: 'Mock Tests', path: '/mock-tests', icon: <FileText size={20} /> },
-        ];
-      case 'STUDENT':
-        return [
-          { name: 'Dashboard', path: '/dashboard', icon: <LayoutDashboard size={20} /> },
-          { name: 'My Schedule', path: '/my-schedule', icon: <Calendar size={20} /> },
-          { name: 'Payments', path: '/my-payments', icon: <CreditCard size={20} /> },
-          { name: 'Mock Tests', path: '/take-test', icon: <FileText size={20} /> },
         ];
       case 'TRAINER':
         return [
           { name: 'Dashboard', path: '/dashboard', icon: <LayoutDashboard size={20} /> },
-          { name: 'Schedule', path: '/trainer-schedule', icon: <Calendar size={20} /> },
-          { name: 'Students', path: '/my-students', icon: <Users size={20} /> },
+          { name: 'My Schedule', path: '/schedule', icon: <Calendar size={20} /> },
+          { name: 'Attendance', path: '/attendance', icon: <ClipboardList size={20} /> },
+          { name: 'Students', path: '/users', icon: <Users size={20} /> },
+        ];
+      case 'STUDENT':
+        return [
+          { name: 'Dashboard', path: '/dashboard', icon: <LayoutDashboard size={20} /> },
+          { name: 'My Schedule', path: '/schedule', icon: <Calendar size={20} /> },
+          { name: 'Attendance', path: '/attendance', icon: <ClipboardList size={20} /> },
+          { name: 'Payments', path: '/payments', icon: <CreditCard size={20} /> },
+          { name: 'Mock Tests', path: '/mock-tests', icon: <FileText size={20} /> },
         ];
       default:
         return [];
@@ -53,15 +57,15 @@ export default function Sidebar() {
         </div>
       </div>
 
-      <nav className="flex-1 px-4 space-y-2 mt-4">
+      <nav className="flex-1 px-4 space-y-1 mt-2">
         {getNavItems().map((item) => (
           <NavLink
             key={item.path}
             to={item.path}
             className={({ isActive }) =>
               `flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 ${
-                isActive 
-                  ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20' 
+                isActive
+                  ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20'
                   : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'
               }`
             }
@@ -73,7 +77,11 @@ export default function Sidebar() {
       </nav>
 
       <div className="p-4">
-        <button 
+        <div className="p-3 bg-slate-800 rounded-xl mb-3 border border-slate-700">
+          <p className="text-xs text-slate-500">School</p>
+          <p className="text-sm text-slate-300 font-medium truncate">{user?.schoolName || 'DriveFlow Academy'}</p>
+        </div>
+        <button
           onClick={logout}
           className="flex items-center gap-3 w-full px-4 py-3 text-slate-400 hover:bg-red-500/10 hover:text-red-400 rounded-xl transition-colors duration-200"
         >

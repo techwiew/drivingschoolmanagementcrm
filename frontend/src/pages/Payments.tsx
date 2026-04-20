@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { api } from '../lib/axios';
 import { useAuthStore } from '../store/authStore';
-import { CreditCard, Plus, Search, CheckCircle, Clock, X, Loader2 } from 'lucide-react';
+import { CreditCard, Plus, Search, CheckCircle, Clock, X, Loader2, AlertCircle } from 'lucide-react';
 import { format } from 'date-fns';
 
 export default function Payments() {
@@ -11,7 +11,8 @@ export default function Payments() {
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [formData, setFormData] = useState({ studentId: '', amount: '', method: 'CASH', status: 'COMPLETED' });
+  const [searchTerm, setSearchTerm] = useState('');
+  const [formData, setFormData] = useState({ studentId: '', amount: '', method: 'CASH', status: 'PAID', notes: '' });
 
   const fetchPayments = async () => {
     try {
@@ -27,8 +28,6 @@ export default function Payments() {
   const fetchStudents = async () => {
     try {
       const res = await api.get('/users');
-      // For this demo, we assume we fetch the user's Profile ID rather than just user ID.
-      // We will handle it on the backend by finding the studentProfile associated with this user.
       setStudents(res.data.filter((u: any) => u.role === 'STUDENT'));
     } catch (err) {
       console.error(err);
@@ -37,29 +36,41 @@ export default function Payments() {
 
   useEffect(() => {
     fetchPayments();
-    if (user?.role === 'ADMIN') {
-      fetchStudents();
-    }
+    if (user?.role === 'ADMIN') fetchStudents();
   }, [user]);
 
   const handleRecordPayment = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
     try {
-      // Find the profile ID for this user ID
-      // To simplify this frontend call, we'll assume backend expects Student Profile ID, 
-      // but in our mock we might pass User ID. Let's just pass User ID and let the backend map it if needed.
-      // Actually, my backend code requires `studentId` which is the `StudentProfile.id`.
-      // Let's modify the payload to include userId and let backend find the profile.
       await api.post('/payments', formData);
       setIsModalOpen(false);
+      setFormData({ studentId: '', amount: '', method: 'CASH', status: 'PAID', notes: '' });
       fetchPayments();
-      setFormData({ studentId: '', amount: '', method: 'CASH', status: 'COMPLETED' });
-    } catch (err) {
-      alert('Failed to record payment');
+    } catch (err: any) {
+      alert('Failed to record payment: ' + (err.response?.data?.details || err.message));
     } finally {
       setSaving(false);
     }
+  };
+
+  const totalCollected = payments
+    .filter(p => p.status === 'PAID')
+    .reduce((acc, curr) => acc + curr.amount, 0);
+
+  const totalPending = payments
+    .filter(p => p.status === 'PENDING')
+    .reduce((acc, curr) => acc + curr.amount, 0);
+
+  const filtered = payments.filter(p => {
+    const name = `${p.student?.user?.firstName} ${p.student?.user?.lastName}`.toLowerCase();
+    return name.includes(searchTerm.toLowerCase());
+  });
+
+  const statusColor = (s: string) => {
+    if (s === 'PAID') return 'bg-emerald-100 text-emerald-700';
+    if (s === 'PENDING') return 'bg-orange-100 text-orange-700';
+    return 'bg-red-100 text-red-700';
   };
 
   return (
@@ -70,7 +81,7 @@ export default function Payments() {
           <p className="text-slate-500">Track all financial transactions and receipts.</p>
         </div>
         {user?.role === 'ADMIN' && (
-          <button 
+          <button
             onClick={() => setIsModalOpen(true)}
             className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg transition-colors shadow-sm flex items-center gap-2"
           >
@@ -79,16 +90,15 @@ export default function Payments() {
         )}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+      {/* Summary Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4">
           <div className="bg-emerald-100 text-emerald-600 p-4 rounded-xl">
             <CheckCircle size={24} />
           </div>
           <div>
             <p className="text-sm text-slate-500 font-medium">Total Collected</p>
-            <p className="text-2xl font-bold text-slate-800">
-              ${payments.filter(p => p.status === 'COMPLETED').reduce((acc, curr) => acc + curr.amount, 0).toFixed(2)}
-            </p>
+            <p className="text-2xl font-bold text-slate-800">${totalCollected.toFixed(2)}</p>
           </div>
         </div>
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4">
@@ -97,20 +107,30 @@ export default function Payments() {
           </div>
           <div>
             <p className="text-sm text-slate-500 font-medium">Pending Payments</p>
-            <p className="text-2xl font-bold text-slate-800">
-              ${payments.filter(p => p.status === 'PENDING').reduce((acc, curr) => acc + curr.amount, 0).toFixed(2)}
-            </p>
+            <p className="text-2xl font-bold text-slate-800">${totalPending.toFixed(2)}</p>
+          </div>
+        </div>
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4">
+          <div className="bg-blue-100 text-blue-600 p-4 rounded-xl">
+            <CreditCard size={24} />
+          </div>
+          <div>
+            <p className="text-sm text-slate-500 font-medium">Total Transactions</p>
+            <p className="text-2xl font-bold text-slate-800">{payments.length}</p>
           </div>
         </div>
       </div>
 
+      {/* Table */}
       <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
         <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
           <div className="relative w-64">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-            <input 
-              type="text" 
-              placeholder="Search transactions..." 
+            <input
+              type="text"
+              placeholder="Search by student name..."
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
               className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
             />
           </div>
@@ -129,38 +149,40 @@ export default function Payments() {
                 <th className="px-6 py-4 font-medium">Amount</th>
                 <th className="px-6 py-4 font-medium">Method</th>
                 <th className="px-6 py-4 font-medium">Status</th>
+                <th className="px-6 py-4 font-medium">Notes</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {payments.map((p) => (
+              {filtered.map((p) => (
                 <tr key={p.id} className="hover:bg-slate-50/50 transition-colors">
-                  <td className="px-6 py-4 text-sm font-medium text-slate-700">
-                    {format(new Date(p.paymentDate), 'MMM dd, yyyy')}
+                  <td className="px-6 py-4 text-sm text-slate-700">
+                    {format(new Date(p.createdAt), 'MMM dd, yyyy')}
                   </td>
                   <td className="px-6 py-4">
                     <p className="font-medium text-slate-800">{p.student?.user?.firstName} {p.student?.user?.lastName}</p>
+                    <p className="text-xs text-slate-400">{p.student?.user?.email}</p>
                   </td>
-                  <td className="px-6 py-4 font-bold text-slate-800">
-                    ${p.amount.toFixed(2)}
-                  </td>
+                  <td className="px-6 py-4 font-bold text-slate-800">${p.amount.toFixed(2)}</td>
                   <td className="px-6 py-4">
                     <span className="flex items-center gap-2 text-sm text-slate-600">
                       <CreditCard size={16} className="text-slate-400" />
-                      {p.method}
+                      {p.method?.replace('_', ' ')}
                     </span>
                   </td>
                   <td className="px-6 py-4">
-                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold ${
-                      p.status === 'COMPLETED' ? 'bg-emerald-100 text-emerald-700' : 'bg-orange-100 text-orange-700'
-                    }`}>
+                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold ${statusColor(p.status)}`}>
                       {p.status}
                     </span>
                   </td>
+                  <td className="px-6 py-4 text-sm text-slate-500">{p.notes || '—'}</td>
                 </tr>
               ))}
-              {payments.length === 0 && (
+              {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="p-12 text-center text-slate-400">No payment records found.</td>
+                  <td colSpan={6} className="p-12 text-center text-slate-400">
+                    <AlertCircle size={32} className="mx-auto mb-3 opacity-40" />
+                    No payment records found.
+                  </td>
                 </tr>
               )}
             </tbody>
@@ -168,6 +190,7 @@ export default function Payments() {
         )}
       </div>
 
+      {/* Record Payment Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
@@ -180,41 +203,59 @@ export default function Payments() {
             <form onSubmit={handleRecordPayment} className="p-6 space-y-4">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Select Student</label>
-                <select required value={formData.studentId} onChange={e => setFormData({...formData, studentId: e.target.value})} className="w-full border border-slate-200 rounded-lg p-2.5 focus:ring-2 focus:ring-emerald-500 outline-none">
+                <select
+                  required value={formData.studentId}
+                  onChange={e => setFormData({ ...formData, studentId: e.target.value })}
+                  className="w-full border border-slate-200 rounded-lg p-2.5 focus:ring-2 focus:ring-emerald-500 outline-none"
+                >
                   <option value="">Choose a student</option>
                   {students.map(s => (
-                    <option key={s.id} value={s.id}>{s.firstName} {s.lastName}</option>
+                    <option key={s.id} value={s.id}>{s.firstName} {s.lastName} ({s.email})</option>
                   ))}
                 </select>
-                <p className="text-xs text-slate-400 mt-1">Select the student's User account.</p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Amount ($)</label>
-                <input type="number" step="0.01" required value={formData.amount} onChange={e => setFormData({...formData, amount: e.target.value})} className="w-full border border-slate-200 rounded-lg p-2.5 focus:ring-2 focus:ring-emerald-500 outline-none" placeholder="150.00" />
+                <input
+                  type="number" step="0.01" required value={formData.amount}
+                  onChange={e => setFormData({ ...formData, amount: e.target.value })}
+                  className="w-full border border-slate-200 rounded-lg p-2.5 focus:ring-2 focus:ring-emerald-500 outline-none"
+                  placeholder="150.00"
+                />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Payment Method</label>
-                  <select value={formData.method} onChange={e => setFormData({...formData, method: e.target.value})} className="w-full border border-slate-200 rounded-lg p-2.5 focus:ring-2 focus:ring-emerald-500 outline-none">
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Method</label>
+                  <select value={formData.method} onChange={e => setFormData({ ...formData, method: e.target.value })} className="w-full border border-slate-200 rounded-lg p-2.5 focus:ring-2 focus:ring-emerald-500 outline-none">
                     <option value="CASH">Cash</option>
                     <option value="CREDIT_CARD">Credit Card</option>
                     <option value="BANK_TRANSFER">Bank Transfer</option>
+                    <option value="UPI">UPI</option>
                   </select>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Status</label>
-                  <select value={formData.status} onChange={e => setFormData({...formData, status: e.target.value})} className="w-full border border-slate-200 rounded-lg p-2.5 focus:ring-2 focus:ring-emerald-500 outline-none">
-                    <option value="COMPLETED">Completed</option>
+                  <select value={formData.status} onChange={e => setFormData({ ...formData, status: e.target.value })} className="w-full border border-slate-200 rounded-lg p-2.5 focus:ring-2 focus:ring-emerald-500 outline-none">
+                    <option value="PAID">Paid</option>
                     <option value="PENDING">Pending</option>
                   </select>
                 </div>
               </div>
-              <div className="pt-4 flex gap-3">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Notes (optional)</label>
+                <input
+                  type="text" value={formData.notes}
+                  onChange={e => setFormData({ ...formData, notes: e.target.value })}
+                  className="w-full border border-slate-200 rounded-lg p-2.5 focus:ring-2 focus:ring-emerald-500 outline-none"
+                  placeholder="e.g. First installment"
+                />
+              </div>
+              <div className="pt-2 flex gap-3">
                 <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 px-4 py-2.5 border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-50 transition-colors">
                   Cancel
                 </button>
                 <button type="submit" disabled={saving} className="flex-1 px-4 py-2.5 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition-colors flex justify-center items-center">
-                  {saving ? <Loader2 className="animate-spin" /> : 'Record Payment'}
+                  {saving ? <Loader2 className="animate-spin" size={18} /> : 'Record Payment'}
                 </button>
               </div>
             </form>
