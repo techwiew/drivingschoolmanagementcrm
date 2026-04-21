@@ -137,7 +137,7 @@ export default function StudentDashboard() {
                     <div>
                       <h4 className="font-bold text-slate-800 text-sm">{s.course?.title}</h4>
                       <p className="text-xs text-slate-500">
-                        {format(new Date(s.startTime), 'h:mm a')} – {format(new Date(s.endTime), 'h:mm a')}
+                        {format(new Date(s.startTime), 'h:mm a')}
                       </p>
                       <p className="text-xs text-emerald-600 mt-0.5">
                         Trainer: {s.trainer?.user?.firstName} {s.trainer?.user?.lastName}
@@ -225,3 +225,4 @@ export default function StudentDashboard() {
     </div>
   );
 }
+

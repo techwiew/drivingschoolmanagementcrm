@@ -7,22 +7,28 @@ const express_1 = __importDefault(require("express"));
 const client_1 = require("@prisma/client");
 const router = express_1.default.Router();
 const prisma = new client_1.PrismaClient();
+const getAuthUser = (req, res) => {
+    if (!req.user?.userId || !req.user.schoolId || !req.user.role) {
+        res.status(401).json({ error: 'Unauthorized' });
+        return null;
+    }
+    return req.user;
+};
 // Get all payments for the school (or just student's own)
 router.get('/', async (req, res) => {
     try {
-        const whereClause = { schoolId: req.user.schoolId };
-        // If student, only show their payments
-        if (req.user.role === 'STUDENT') {
-            const studentProfile = await prisma.studentProfile.findUnique({ where: { userId: req.user.userId } });
-            if (studentProfile) {
+        const authUser = getAuthUser(req, res);
+        if (!authUser)
+            return;
+        const whereClause = { schoolId: authUser.schoolId };
+        if (authUser.role === 'STUDENT') {
+            const studentProfile = await prisma.studentProfile.findUnique({ where: { userId: authUser.userId } });
+            if (studentProfile)
                 whereClause.studentId = studentProfile.id;
-            }
         }
         const payments = await prisma.payment.findMany({
             where: whereClause,
-            include: {
-                student: { include: { user: true } }
-            },
+            include: { student: { include: { user: true } } },
             orderBy: { createdAt: 'desc' }
         });
         res.json(payments);
@@ -34,16 +40,22 @@ router.get('/', async (req, res) => {
 // Record a new payment (admin only)
 router.post('/', async (req, res) => {
     try {
+        const authUser = getAuthUser(req, res);
+        if (!authUser)
+            return;
+        if (authUser.role !== 'ADMIN')
+            return res.status(403).json({ error: 'Only admin can record payments' });
         const { studentId, amount, method, status, notes } = req.body;
-        // studentId from frontend is a User.id — resolve to StudentProfile.id
-        let resolvedStudentId = studentId;
-        const student = await prisma.studentProfile.findUnique({ where: { userId: studentId } });
-        if (student) {
-            resolvedStudentId = student.id;
+        if (!studentId || amount === undefined) {
+            return res.status(400).json({ error: 'studentId and amount are required' });
+        }
+        let resolvedStudentId = String(studentId);
+        const studentByUserId = await prisma.studentProfile.findUnique({ where: { userId: resolvedStudentId } });
+        if (studentByUserId) {
+            resolvedStudentId = studentByUserId.id;
         }
         else {
-            // Maybe they passed a StudentProfile.id directly
-            const directProfile = await prisma.studentProfile.findUnique({ where: { id: studentId } });
+            const directProfile = await prisma.studentProfile.findUnique({ where: { id: resolvedStudentId } });
             if (!directProfile) {
                 return res.status(400).json({ error: 'Student profile not found for the given ID' });
             }
@@ -51,9 +63,9 @@ router.post('/', async (req, res) => {
         }
         const payment = await prisma.payment.create({
             data: {
-                schoolId: req.user.schoolId,
+                schoolId: authUser.schoolId,
                 studentId: resolvedStudentId,
-                amount: parseFloat(amount),
+                amount: parseFloat(String(amount)),
                 method: method || 'CASH',
                 status: status || 'PAID',
                 notes: notes || null,
@@ -61,7 +73,7 @@ router.post('/', async (req, res) => {
             },
             include: { student: { include: { user: true } } }
         });
-        res.json({ message: 'Payment recorded successfully', payment });
+        res.status(201).json({ message: 'Payment recorded successfully', payment });
     }
     catch (error) {
         console.error(error);
@@ -71,9 +83,14 @@ router.post('/', async (req, res) => {
 // Update payment status
 router.patch('/:id/status', async (req, res) => {
     try {
+        const authUser = getAuthUser(req, res);
+        if (!authUser)
+            return;
+        if (authUser.role !== 'ADMIN')
+            return res.status(403).json({ error: 'Only admin can update payment status' });
         const { status } = req.body;
         const payment = await prisma.payment.update({
-            where: { id: req.params.id },
+            where: { id: String(req.params.id) },
             data: { status }
         });
         res.json({ message: 'Payment status updated', payment });

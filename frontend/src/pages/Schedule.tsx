@@ -1,20 +1,56 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { format } from 'date-fns';
+import {
+  AlertTriangle,
+  Calendar as CalendarIcon,
+  CheckCircle,
+  Clock,
+  Loader2,
+  Pencil,
+  Plus,
+  Trash2,
+  Users,
+  X
+} from 'lucide-react';
 import { api } from '../lib/axios';
 import { useAuthStore } from '../store/authStore';
-import { Calendar as CalendarIcon, Clock, Users, Plus, X, Loader2, CheckCircle } from 'lucide-react';
-import { format } from 'date-fns';
+
+type ScheduleFormState = {
+  trainerId: string;
+  studentId: string;
+  date: string;
+  startTime: string;
+  status: 'SCHEDULED' | 'COMPLETED' | 'CANCELLED';
+  notes: string;
+};
+
+const defaultForm: ScheduleFormState = {
+  trainerId: '',
+  studentId: '',
+  date: '',
+  startTime: '',
+  status: 'SCHEDULED',
+  notes: ''
+};
 
 export default function Schedule() {
   const { user } = useAuthStore();
+  const isAdmin = user?.role === 'ADMIN';
+
   const [schedules, setSchedules] = useState<any[]>([]);
   const [trainers, setTrainers] = useState<any[]>([]);
+  const [students, setStudents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isModalOpen, setIsModalOpen] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [formData, setFormData] = useState({ trainerId: '', date: '', startTime: '', endTime: '' });
-  const [filterStatus, setFilterStatus] = useState<string>('ALL');
+  const [deleting, setDeleting] = useState(false);
 
-  const isAdmin = user?.role === 'ADMIN';
+  const [filterStatus, setFilterStatus] = useState('ALL');
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingScheduleId, setEditingScheduleId] = useState<string | null>(null);
+  const [formData, setFormData] = useState<ScheduleFormState>(defaultForm);
+
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [selectedScheduleForDelete, setSelectedScheduleForDelete] = useState<any | null>(null);
 
   const fetchSchedules = async () => {
     try {
@@ -27,10 +63,13 @@ export default function Schedule() {
     }
   };
 
-  const fetchTrainers = async () => {
+  const fetchUsers = async () => {
+    if (!isAdmin) return;
     try {
       const res = await api.get('/users');
-      setTrainers(res.data.filter((u: any) => u.role === 'TRAINER'));
+      const allUsers = res.data || [];
+      setTrainers(allUsers.filter((u: any) => u.role === 'TRAINER'));
+      setStudents(allUsers.filter((u: any) => u.role === 'STUDENT'));
     } catch (err) {
       console.error(err);
     }
@@ -38,41 +77,98 @@ export default function Schedule() {
 
   useEffect(() => {
     fetchSchedules();
-    if (isAdmin) fetchTrainers();
+    fetchUsers();
   }, []);
 
-  const handleAddSchedule = async (e: React.FormEvent) => {
+  const openCreateModal = () => {
+    setEditingScheduleId(null);
+    setFormData(defaultForm);
+    setIsModalOpen(true);
+  };
+
+  const openEditModal = (schedule: any) => {
+    const date = new Date(schedule.startTime);
+    const trainerUserId = schedule.trainer?.user?.id || '';
+    const studentUserId = schedule.student?.user?.id || '';
+    setEditingScheduleId(schedule.id);
+    setFormData({
+      trainerId: trainerUserId,
+      studentId: studentUserId,
+      date: format(date, 'yyyy-MM-dd'),
+      startTime: format(date, 'HH:mm'),
+      status: schedule.status || 'SCHEDULED',
+      notes: schedule.notes || ''
+    });
+    setIsModalOpen(true);
+  };
+
+  const closeScheduleModal = () => {
+    setIsModalOpen(false);
+    setEditingScheduleId(null);
+    setFormData(defaultForm);
+  };
+
+  const handleSaveSchedule = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
     try {
       const startDateTime = new Date(`${formData.date}T${formData.startTime}`);
-      const endDateTime = new Date(`${formData.date}T${formData.endTime}`);
-
-      await api.post('/schedules', {
+      const payload = {
         trainerId: formData.trainerId,
+        studentId: formData.studentId,
         startTime: startDateTime.toISOString(),
-        endTime: endDateTime.toISOString()
-      });
+        status: formData.status,
+        notes: formData.notes
+      };
 
-      setIsModalOpen(false);
-      setFormData({ trainerId: '', date: '', startTime: '', endTime: '' });
+      if (editingScheduleId) {
+        await api.put(`/schedules/${editingScheduleId}`, payload);
+      } else {
+        await api.post('/schedules', payload);
+      }
+
+      closeScheduleModal();
       fetchSchedules();
     } catch (err: any) {
-      alert('Failed to add schedule: ' + (err.response?.data?.error || err.message));
+      alert('Failed to save schedule: ' + (err.response?.data?.error || err.message));
     } finally {
       setSaving(false);
+    }
+  };
+
+  const openDeleteModal = (schedule: any) => {
+    setSelectedScheduleForDelete(schedule);
+    setDeleteModalOpen(true);
+  };
+
+  const closeDeleteModal = () => {
+    setSelectedScheduleForDelete(null);
+    setDeleteModalOpen(false);
+  };
+
+  const confirmDelete = async () => {
+    if (!selectedScheduleForDelete) return;
+    setDeleting(true);
+    try {
+      await api.delete(`/schedules/${selectedScheduleForDelete.id}`);
+      closeDeleteModal();
+      fetchSchedules();
+    } catch (err: any) {
+      alert('Failed to delete schedule: ' + (err.response?.data?.error || err.message));
+    } finally {
+      setDeleting(false);
     }
   };
 
   const statusColors: Record<string, string> = {
     SCHEDULED: 'bg-emerald-100 text-emerald-700',
     COMPLETED: 'bg-blue-100 text-blue-700',
-    CANCELLED: 'bg-red-100 text-red-700',
+    CANCELLED: 'bg-red-100 text-red-700'
   };
 
   const filtered = filterStatus === 'ALL'
     ? schedules
-    : schedules.filter(s => s.status === filterStatus);
+    : schedules.filter((s) => s.status === filterStatus);
 
   return (
     <div className="space-y-6">
@@ -80,12 +176,12 @@ export default function Schedule() {
         <div>
           <h1 className="text-2xl font-bold text-slate-800">Class Schedule</h1>
           <p className="text-slate-500">
-            {isAdmin ? 'Manage all driving sessions.' : 'View your upcoming driving sessions.'}
+            {isAdmin ? 'Manage class schedules and assigned students.' : 'View your assigned classes.'}
           </p>
         </div>
         {isAdmin && (
           <button
-            onClick={() => setIsModalOpen(true)}
+            onClick={openCreateModal}
             className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg transition-colors shadow-sm flex items-center gap-2"
           >
             <Plus size={18} /> Schedule Class
@@ -93,9 +189,8 @@ export default function Schedule() {
         )}
       </div>
 
-      {/* Filter Tabs */}
-      <div className="flex gap-2">
-        {['ALL', 'SCHEDULED', 'COMPLETED', 'CANCELLED'].map(s => (
+      <div className="flex gap-2 flex-wrap">
+        {['ALL', 'SCHEDULED', 'COMPLETED', 'CANCELLED'].map((s) => (
           <button
             key={s}
             onClick={() => setFilterStatus(s)}
@@ -105,7 +200,9 @@ export default function Schedule() {
                 : 'bg-white text-slate-600 border border-slate-200 hover:border-emerald-300'
             }`}
           >
-            {s === 'ALL' ? `All (${schedules.length})` : `${s.charAt(0) + s.slice(1).toLowerCase()} (${schedules.filter(sc => sc.status === s).length})`}
+            {s === 'ALL'
+              ? `All (${schedules.length})`
+              : `${s.charAt(0) + s.slice(1).toLowerCase()} (${schedules.filter((sc) => sc.status === s).length})`}
           </button>
         ))}
       </div>
@@ -117,18 +214,19 @@ export default function Schedule() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filtered.map((schedule) => (
-            <div key={schedule.id} className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden hover:shadow-md transition-shadow group">
+            <div key={schedule.id} className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden hover:shadow-md transition-shadow">
               <div className={`p-4 border-b flex justify-between items-start ${
-                schedule.status === 'COMPLETED' ? 'bg-blue-50 border-blue-100' :
-                schedule.status === 'CANCELLED' ? 'bg-red-50 border-red-100' :
-                'bg-emerald-500/10 border-emerald-500/10'
+                schedule.status === 'COMPLETED'
+                  ? 'bg-blue-50 border-blue-100'
+                  : schedule.status === 'CANCELLED'
+                    ? 'bg-red-50 border-red-100'
+                    : 'bg-emerald-500/10 border-emerald-500/10'
               }`}>
                 <div className="flex items-center gap-3">
                   <div className="bg-white p-2 rounded-lg shadow-sm">
                     {schedule.status === 'COMPLETED'
                       ? <CheckCircle size={22} className="text-blue-500" />
-                      : <CalendarIcon size={22} className="text-emerald-600" />
-                    }
+                      : <CalendarIcon size={22} className="text-emerald-600" />}
                   </div>
                   <div>
                     <h3 className="font-bold text-slate-800 text-sm leading-tight">
@@ -139,6 +237,24 @@ export default function Schedule() {
                     </span>
                   </div>
                 </div>
+                {isAdmin && (
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => openEditModal(schedule)}
+                      className="p-2 text-slate-500 hover:text-blue-600 hover:bg-white rounded-lg transition-colors"
+                      title="Edit Schedule"
+                    >
+                      <Pencil size={16} />
+                    </button>
+                    <button
+                      onClick={() => openDeleteModal(schedule)}
+                      className="p-2 text-slate-500 hover:text-red-600 hover:bg-white rounded-lg transition-colors"
+                      title="Delete Schedule"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                )}
               </div>
 
               <div className="p-5 space-y-3">
@@ -146,7 +262,7 @@ export default function Schedule() {
                   <Clock size={16} className="text-slate-400 flex-shrink-0" />
                   <div className="text-sm">
                     <p className="font-medium">{format(new Date(schedule.startTime), 'MMM d, yyyy')}</p>
-                    <p className="text-slate-500 text-xs">{format(new Date(schedule.startTime), 'h:mm a')} – {format(new Date(schedule.endTime), 'h:mm a')}</p>
+                    <p className="text-slate-500 text-xs">{format(new Date(schedule.startTime), 'h:mm a')}</p>
                   </div>
                 </div>
 
@@ -154,9 +270,13 @@ export default function Schedule() {
                   <Users size={16} className="text-slate-400 flex-shrink-0" />
                   <div className="text-sm">
                     <p className="font-medium">
-                      {schedule.trainer?.user?.firstName} {schedule.trainer?.user?.lastName}
+                      Trainer: {schedule.trainer?.user?.firstName} {schedule.trainer?.user?.lastName}
                     </p>
-                    <p className="text-slate-400 text-xs">{schedule.attendances?.length || 0} students marked</p>
+                    <p className="text-slate-500 text-xs">
+                      Student: {schedule.student?.user?.firstName
+                        ? `${schedule.student.user.firstName} ${schedule.student.user.lastName}`
+                        : 'Not assigned'}
+                    </p>
                   </div>
                 </div>
               </div>
@@ -169,7 +289,7 @@ export default function Schedule() {
               <p className="text-slate-500 font-medium">No classes found for this filter.</p>
               {isAdmin && (
                 <button
-                  onClick={() => setIsModalOpen(true)}
+                  onClick={openCreateModal}
                   className="mt-4 text-emerald-600 text-sm font-medium hover:underline"
                 >
                   + Schedule the first class
@@ -180,72 +300,151 @@ export default function Schedule() {
         </div>
       )}
 
-      {/* Schedule Modal (Admin only) */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
             <div className="flex justify-between items-center p-6 border-b border-slate-100">
-              <h2 className="text-xl font-bold text-slate-800">Schedule New Class</h2>
-              <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-600">
+              <h2 className="text-xl font-bold text-slate-800">
+                {editingScheduleId ? 'Edit Class Schedule' : 'Schedule New Class'}
+              </h2>
+              <button onClick={closeScheduleModal} className="text-slate-400 hover:text-slate-600">
                 <X size={24} />
               </button>
             </div>
-            <form onSubmit={handleAddSchedule} className="p-6 space-y-4">
+            <form onSubmit={handleSaveSchedule} className="p-6 space-y-4">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Assign Trainer</label>
                 <select
-                  required value={formData.trainerId}
-                  onChange={e => setFormData({ ...formData, trainerId: e.target.value })}
+                  required
+                  value={formData.trainerId}
+                  onChange={(e) => setFormData({ ...formData, trainerId: e.target.value })}
                   className="w-full border border-slate-200 rounded-lg p-2.5 focus:ring-2 focus:ring-emerald-500 outline-none"
                 >
                   <option value="">Select a Trainer</option>
-                  {trainers.map(t => (
+                  {trainers.map((t) => (
                     <option key={t.id} value={t.id}>{t.firstName} {t.lastName}</option>
                   ))}
                 </select>
-                {trainers.length === 0 && (
-                  <p className="text-xs text-orange-500 mt-1">No trainers found. Add a trainer in Users first.</p>
-                )}
               </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Assign Student</label>
+                <select
+                  required
+                  value={formData.studentId}
+                  onChange={(e) => setFormData({ ...formData, studentId: e.target.value })}
+                  className="w-full border border-slate-200 rounded-lg p-2.5 focus:ring-2 focus:ring-emerald-500 outline-none"
+                >
+                  <option value="">Select a Student</option>
+                  {students.map((s) => (
+                    <option key={s.id} value={s.id}>{s.firstName} {s.lastName}</option>
+                  ))}
+                </select>
+              </div>
+
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Date</label>
                 <input
-                  type="date" required value={formData.date}
+                  type="date"
+                  required
+                  value={formData.date}
                   min={new Date().toISOString().split('T')[0]}
-                  onChange={e => setFormData({ ...formData, date: e.target.value })}
+                  onChange={(e) => setFormData({ ...formData, date: e.target.value })}
                   className="w-full border border-slate-200 rounded-lg p-2.5 focus:ring-2 focus:ring-emerald-500 outline-none"
                 />
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Start Time</label>
-                  <input
-                    type="time" required value={formData.startTime}
-                    onChange={e => setFormData({ ...formData, startTime: e.target.value })}
-                    className="w-full border border-slate-200 rounded-lg p-2.5 focus:ring-2 focus:ring-emerald-500 outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">End Time</label>
-                  <input
-                    type="time" required value={formData.endTime}
-                    onChange={e => setFormData({ ...formData, endTime: e.target.value })}
-                    className="w-full border border-slate-200 rounded-lg p-2.5 focus:ring-2 focus:ring-emerald-500 outline-none"
-                  />
-                </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Start Time</label>
+                <input
+                  type="time"
+                  required
+                  value={formData.startTime}
+                  onChange={(e) => setFormData({ ...formData, startTime: e.target.value })}
+                  className="w-full border border-slate-200 rounded-lg p-2.5 focus:ring-2 focus:ring-emerald-500 outline-none"
+                />
               </div>
+
+              {editingScheduleId && (
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Status</label>
+                  <select
+                    value={formData.status}
+                    onChange={(e) => setFormData({ ...formData, status: e.target.value as ScheduleFormState['status'] })}
+                    className="w-full border border-slate-200 rounded-lg p-2.5 focus:ring-2 focus:ring-emerald-500 outline-none"
+                  >
+                    <option value="SCHEDULED">SCHEDULED</option>
+                    <option value="COMPLETED">COMPLETED</option>
+                    <option value="CANCELLED">CANCELLED</option>
+                  </select>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Notes (Optional)</label>
+                <textarea
+                  value={formData.notes}
+                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                  rows={3}
+                  className="w-full border border-slate-200 rounded-lg p-2.5 focus:ring-2 focus:ring-emerald-500 outline-none"
+                />
+              </div>
+
               <div className="pt-2 flex gap-3">
-                <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 px-4 py-2.5 border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-50 transition-colors">
+                <button
+                  type="button"
+                  onClick={closeScheduleModal}
+                  className="flex-1 px-4 py-2.5 border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-50 transition-colors"
+                >
                   Cancel
                 </button>
                 <button
-                  type="submit" disabled={saving || trainers.length === 0}
+                  type="submit"
+                  disabled={saving || trainers.length === 0 || students.length === 0}
                   className="flex-1 px-4 py-2.5 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 disabled:opacity-50 transition-colors flex justify-center items-center"
                 >
-                  {saving ? <Loader2 className="animate-spin" size={18} /> : 'Schedule'}
+                  {saving ? <Loader2 className="animate-spin" size={18} /> : editingScheduleId ? 'Update' : 'Schedule'}
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {deleteModalOpen && selectedScheduleForDelete && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white w-full max-w-md rounded-2xl shadow-xl p-6">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-full bg-red-100 text-red-600 flex items-center justify-center">
+                <AlertTriangle size={18} />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-slate-800">Delete Schedule</h3>
+                <p className="text-sm text-slate-500 mt-1">
+                  This will permanently delete the schedule for{' '}
+                  <span className="font-medium text-slate-700">
+                    {selectedScheduleForDelete.student?.user?.firstName
+                      ? `${selectedScheduleForDelete.student.user.firstName} ${selectedScheduleForDelete.student.user.lastName}`
+                      : 'the selected student'}
+                  </span>.
+                </p>
+              </div>
+            </div>
+            <div className="mt-6 flex gap-3">
+              <button
+                onClick={closeDeleteModal}
+                className="flex-1 px-4 py-2.5 border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmDelete}
+                disabled={deleting}
+                className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-colors flex justify-center"
+              >
+                {deleting ? <Loader2 size={18} className="animate-spin" /> : 'Delete'}
+              </button>
+            </div>
           </div>
         </div>
       )}

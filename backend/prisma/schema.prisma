@@ -11,6 +11,13 @@ model School {
   id            String          @id @default(uuid())
   name          String
   contactEmail  String
+  mobile        String?
+  ownerName     String?
+  ownerEmail    String?
+  ownerMobile   String?
+  location      String?
+  city          String?
+  pincode       String?
   createdAt     DateTime        @default(now())
   users         User[]
   courses       Course[]
@@ -50,15 +57,16 @@ enum UserStatus {
 }
 
 model StudentProfile {
-  id            String       @id @default(uuid())
-  userId        String       @unique
-  licenseStatus String       @default("Pending")
-  totalPaid     Float        @default(0)
-  balanceDue    Float        @default(0)
-  user          User         @relation(fields: [userId], references: [id])
-  attendances   Attendance[]
-  payments      Payment[]
-  testResults   TestResult[]
+  id               String          @id @default(uuid())
+  userId           String          @unique
+  licenseStatus    String          @default("Pending")
+  totalPaid        Float           @default(0)
+  balanceDue       Float           @default(0)
+  user             User            @relation(fields: [userId], references: [id])
+  attendances      Attendance[]
+  payments         Payment[]
+  testResults      TestResult[]
+  assignedSchedules ClassSchedule[] @relation("AssignedStudentSchedules")
 }
 
 model TrainerProfile {
@@ -85,13 +93,15 @@ model ClassSchedule {
   schoolId    String
   courseId    String
   trainerId   String
+  studentId   String?
   startTime   DateTime
-  endTime     DateTime
+  endTime     DateTime?
   status      ClassStatus    @default(SCHEDULED)
   notes       String?
   school      School         @relation(fields: [schoolId], references: [id])
   course      Course         @relation(fields: [courseId], references: [id])
   trainer     TrainerProfile @relation(fields: [trainerId], references: [id])
+  student     StudentProfile? @relation("AssignedStudentSchedules", fields: [studentId], references: [id])
   attendances Attendance[]
 }
 
@@ -178,4 +188,14 @@ model Document {
   remark       String?
   uploadedAt   DateTime @default(now())
   user         User     @relation(fields: [userId], references: [id])
+}
+
+model SuperAdmin {
+  id           String     @id @default(uuid())
+  name         String
+  email        String     @unique
+  mobile       String?
+  passwordHash String
+  status       UserStatus @default(ACTIVE)
+  createdAt    DateTime   @default(now())
 }

@@ -13,8 +13,7 @@
   },
   "include": [
     "index.ts",
-    "routes/**/*.ts",
-    "src/**/*.ts"
+    "routes/**/*.ts"
   ],
   "exclude": [
     "dist",

@@ -106,7 +106,7 @@ export default function AdminDashboard() {
                   <div className="flex-1 min-w-0">
                     <h4 className="font-semibold text-slate-800 truncate">{s.course?.title}</h4>
                     <p className="text-xs text-slate-500">
-                      {format(new Date(s.startTime), 'h:mm a')} – {format(new Date(s.endTime), 'h:mm a')}
+                      {format(new Date(s.startTime), 'h:mm a')}
                     </p>
                     <p className="text-xs text-emerald-600">Trainer: {s.trainer?.user?.firstName} {s.trainer?.user?.lastName}</p>
                   </div>
@@ -176,3 +176,4 @@ export default function AdminDashboard() {
     </div>
   );
 }
+

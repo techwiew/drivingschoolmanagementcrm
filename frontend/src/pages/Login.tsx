@@ -1,38 +1,104 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { AlertCircle, KeyRound, Loader2, Mail, Shield, X } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { api } from '../lib/axios';
-import { KeyRound, Mail, AlertCircle, Loader2, CheckCircle2, ChevronDown, ChevronUp } from 'lucide-react';
 
-const DEMO_CREDS = [
-  { role: 'Admin', email: 'admin@driveflow.com', password: 'Admin@123', color: 'text-purple-600 bg-purple-50 border-purple-200' },
-  { role: 'Trainer', email: 'trainer@driveflow.com', password: 'Trainer@123', color: 'text-blue-600 bg-blue-50 border-blue-200' },
-  { role: 'Student', email: 'student@driveflow.com', password: 'Student@123', color: 'text-emerald-600 bg-emerald-50 border-emerald-200' },
-];
+type ResetForm = {
+  mobile: string;
+  email: string;
+  role: 'ADMIN' | 'STUDENT' | 'TRAINER';
+  password: string;
+  confirmPassword: string;
+};
+
+type SchoolForm = {
+  schoolName: string;
+  schoolOwnerName: string;
+  schoolMobileNumber: string;
+  schoolEmail: string;
+  ownerEmail: string;
+  ownerMobile: string;
+  schoolLocation: string;
+  password: string;
+  location: string;
+  city: string;
+  pincode: string;
+};
 
 export default function Login() {
-  const [email, setEmail] = useState('admin@driveflow.com');
-  const [password, setPassword] = useState('Admin@123');
+  const navigate = useNavigate();
+  const { login } = useAuthStore();
+
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [setupLoading, setSetupLoading] = useState(false);
-  const [setupMsg, setSetupMsg] = useState('');
-  const [showCreds, setShowCreds] = useState(false);
-  const { login } = useAuthStore();
-  const navigate = useNavigate();
 
-  const handleSetup = async () => {
-    setSetupLoading(true);
-    setSetupMsg('');
-    try {
-      const res = await api.post('/setup');
-      setSetupMsg(res.data.message || 'Setup complete! You can now login.');
-    } catch (err: any) {
-      const msg = err.response?.data?.message || err.response?.data?.details || 'Setup failed.';
-      setSetupMsg(msg);
-    } finally {
-      setSetupLoading(false);
-    }
+  const [showResetModal, setShowResetModal] = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
+  const [resetMessage, setResetMessage] = useState('');
+  const [resetError, setResetError] = useState('');
+  const [resetForm, setResetForm] = useState<ResetForm>({
+    mobile: '',
+    email: '',
+    role: 'ADMIN',
+    password: '',
+    confirmPassword: ''
+  });
+
+  const [showSuperAdminModal, setShowSuperAdminModal] = useState(false);
+  const [superAdminEmail, setSuperAdminEmail] = useState('');
+  const [superAdminPassword, setSuperAdminPassword] = useState('');
+  const [superAdminToken, setSuperAdminToken] = useState('');
+  const [superAdminName, setSuperAdminName] = useState('');
+  const [superAdminLoading, setSuperAdminLoading] = useState(false);
+  const [superAdminError, setSuperAdminError] = useState('');
+  const [schoolSaving, setSchoolSaving] = useState(false);
+  const [schoolMessage, setSchoolMessage] = useState('');
+  const [schoolError, setSchoolError] = useState('');
+  const [schoolForm, setSchoolForm] = useState<SchoolForm>({
+    schoolName: '',
+    schoolOwnerName: '',
+    schoolMobileNumber: '',
+    schoolEmail: '',
+    ownerEmail: '',
+    ownerMobile: '',
+    schoolLocation: '',
+    password: '',
+    location: '',
+    city: '',
+    pincode: ''
+  });
+
+  const resetSuperAdminState = () => {
+    setSuperAdminEmail('');
+    setSuperAdminPassword('');
+    setSuperAdminToken('');
+    setSuperAdminName('');
+    setSuperAdminLoading(false);
+    setSuperAdminError('');
+    setSchoolSaving(false);
+    setSchoolMessage('');
+    setSchoolError('');
+    setSchoolForm({
+      schoolName: '',
+      schoolOwnerName: '',
+      schoolMobileNumber: '',
+      schoolEmail: '',
+      ownerEmail: '',
+      ownerMobile: '',
+      schoolLocation: '',
+      password: '',
+      location: '',
+      city: '',
+      pincode: ''
+    });
+  };
+
+  const closeSuperAdminModal = () => {
+    setShowSuperAdminModal(false);
+    resetSuperAdminState();
   };
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -52,14 +118,83 @@ export default function Login() {
     }
   };
 
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setResetMessage('');
+    setResetError('');
+    setResetLoading(true);
+    try {
+      const res = await api.post('/auth/reset-password', resetForm);
+      setResetMessage(res.data.message || 'Password reset successful');
+      setResetForm({
+        mobile: '',
+        email: '',
+        role: 'ADMIN',
+        password: '',
+        confirmPassword: ''
+      });
+    } catch (err: any) {
+      setResetError(err.response?.data?.error || err.response?.data?.details || 'Failed to reset password');
+    } finally {
+      setResetLoading(false);
+    }
+  };
+
+  const handleSuperAdminLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSuperAdminError('');
+    setSuperAdminLoading(true);
+    try {
+      const res = await api.post('/super-admin/login', {
+        email: superAdminEmail,
+        password: superAdminPassword
+      });
+      setSuperAdminToken(res.data.token);
+      setSuperAdminName(res.data.superAdmin?.name || 'Super Admin');
+    } catch (err: any) {
+      setSuperAdminError(err.response?.data?.error || 'Super admin login failed');
+    } finally {
+      setSuperAdminLoading(false);
+    }
+  };
+
+  const handleCreateSchool = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSchoolMessage('');
+    setSchoolError('');
+    setSchoolSaving(true);
+    try {
+      const res = await api.post('/super-admin/schools', schoolForm, {
+        headers: { Authorization: `Bearer ${superAdminToken}` }
+      });
+      setSchoolMessage(res.data.message || 'Driving school created successfully');
+      setSchoolForm({
+        schoolName: '',
+        schoolOwnerName: '',
+        schoolMobileNumber: '',
+        schoolEmail: '',
+        ownerEmail: '',
+        ownerMobile: '',
+        schoolLocation: '',
+        password: '',
+        location: '',
+        city: '',
+        pincode: ''
+      });
+    } catch (err: any) {
+      setSchoolError(err.response?.data?.error || err.response?.data?.details || 'Failed to create school');
+    } finally {
+      setSchoolSaving(false);
+    }
+  };
+
   return (
     <div className="min-h-screen flex bg-slate-50">
-      {/* Left: Form */}
       <div className="w-full lg:w-1/2 flex flex-col justify-center items-center p-8 lg:p-20">
         <div className="w-full max-w-md">
           <div className="mb-8">
             <h1 className="text-4xl font-bold text-slate-900 mb-2 flex items-center gap-3">
-              <span className="bg-emerald-500 text-white p-2 rounded-xl text-2xl">🚘</span> DriveFlow
+              <span className="bg-emerald-500 text-white p-2 rounded-xl text-2xl">DF</span> DriveFlow
             </h1>
             <p className="text-slate-500 text-lg">Sign in to your account to continue.</p>
           </div>
@@ -103,7 +238,7 @@ export default function Login() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="pl-10 w-full border border-slate-300 rounded-xl py-3 px-4 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-colors"
-                  placeholder="••••••••"
+                  placeholder="Enter password"
                   required
                 />
               </div>
@@ -118,54 +253,24 @@ export default function Login() {
             </button>
           </form>
 
-          {/* Quick Login */}
-          <div className="mt-6">
+          <div className="mt-5 flex items-center gap-3">
             <button
-              onClick={() => setShowCreds(v => !v)}
-              className="w-full flex items-center justify-between text-sm text-slate-500 border border-dashed border-slate-300 rounded-xl px-4 py-3 hover:border-emerald-400 hover:text-emerald-600 transition-colors"
+              onClick={() => setShowResetModal(true)}
+              className="flex-1 border border-slate-200 text-slate-600 hover:bg-slate-100 py-2.5 rounded-xl text-sm font-medium transition-colors"
             >
-              <span>Quick Login (Demo Accounts)</span>
-              {showCreds ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+              Reset Password
             </button>
-
-            {showCreds && (
-              <div className="mt-3 space-y-2">
-                {DEMO_CREDS.map(cred => (
-                  <button
-                    key={cred.role}
-                    onClick={() => { setEmail(cred.email); setPassword(cred.password); }}
-                    className={`w-full text-left flex items-center justify-between p-3 rounded-xl border text-sm transition-all hover:shadow-sm ${cred.color}`}
-                  >
-                    <span className="font-semibold">{cred.role}</span>
-                    <span className="text-xs opacity-70">{cred.email}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Setup */}
-          <div className="mt-8 pt-6 border-t border-slate-200">
-            <p className="text-xs text-slate-400 text-center mb-3">First time? Initialize the database below.</p>
-            {setupMsg && (
-              <div className="flex items-start gap-2 text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg p-3 mb-3">
-                <CheckCircle2 size={14} className="mt-0.5 flex-shrink-0" />
-                <span>{setupMsg}</span>
-              </div>
-            )}
             <button
-              onClick={handleSetup}
-              disabled={setupLoading}
-              className="w-full flex justify-center items-center gap-2 text-sm text-slate-500 bg-slate-100 hover:bg-slate-200 rounded-xl py-2.5 transition-colors disabled:opacity-60"
+              onClick={() => setShowSuperAdminModal(true)}
+              className="flex-1 bg-slate-900 text-white hover:bg-slate-800 py-2.5 rounded-xl text-sm font-medium transition-colors flex items-center justify-center gap-2"
             >
-              {setupLoading ? <Loader2 className="animate-spin" size={14} /> : null}
-              {setupLoading ? 'Setting up...' : '⚙️ Run Initial DB Setup'}
+              <Shield size={16} />
+              Super Admin Login
             </button>
           </div>
         </div>
       </div>
 
-      {/* Right: Hero */}
       <div className="hidden lg:flex w-1/2 bg-slate-900 relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-emerald-600/20 to-slate-900 z-10" />
         <img
@@ -174,19 +279,147 @@ export default function Login() {
           className="object-cover w-full h-full opacity-60"
         />
         <div className="absolute inset-0 z-20 flex flex-col justify-end p-20">
-          <div className="flex gap-3 mb-6">
-            {DEMO_CREDS.map(c => (
-              <span key={c.role} className="text-xs text-slate-300 bg-white/10 px-3 py-1 rounded-full border border-white/20">
-                {c.role}
-              </span>
-            ))}
-          </div>
-          <h2 className="text-4xl font-bold text-white mb-4">Master the road<br />with DriveFlow</h2>
+          <h2 className="text-4xl font-bold text-white mb-4">Drive smarter, manage faster</h2>
           <p className="text-slate-300 text-lg max-w-md">
-            The complete driving school management platform — schedules, attendance, payments & tests in one place.
+            One platform for driving schools to run schedules, attendance, payments, mock tests, and users.
           </p>
         </div>
       </div>
+
+      {showResetModal && (
+        <div className="fixed inset-0 bg-slate-900/60 flex items-center justify-center p-4 z-50">
+          <div className="bg-white w-full max-w-md rounded-2xl shadow-xl">
+            <div className="p-5 border-b border-slate-100 flex items-center justify-between">
+              <h3 className="text-lg font-bold text-slate-800">Reset Password</h3>
+              <button onClick={() => setShowResetModal(false)} className="text-slate-400 hover:text-slate-600">
+                <X size={20} />
+              </button>
+            </div>
+            <form onSubmit={handleResetPassword} className="p-5 space-y-4">
+              <input
+                type="tel"
+                placeholder="Mobile Number"
+                value={resetForm.mobile}
+                onChange={(e) => setResetForm((prev) => ({ ...prev, mobile: e.target.value }))}
+                className="w-full border border-slate-200 rounded-lg p-2.5"
+                required
+              />
+              <input
+                type="email"
+                placeholder="Email ID"
+                value={resetForm.email}
+                onChange={(e) => setResetForm((prev) => ({ ...prev, email: e.target.value }))}
+                className="w-full border border-slate-200 rounded-lg p-2.5"
+                required
+              />
+              <select
+                value={resetForm.role}
+                onChange={(e) => setResetForm((prev) => ({ ...prev, role: e.target.value as ResetForm['role'] }))}
+                className="w-full border border-slate-200 rounded-lg p-2.5"
+              >
+                <option value="ADMIN">Admin</option>
+                <option value="STUDENT">Student</option>
+                <option value="TRAINER">Trainer</option>
+              </select>
+              <input
+                type="password"
+                placeholder="New Password"
+                value={resetForm.password}
+                onChange={(e) => setResetForm((prev) => ({ ...prev, password: e.target.value }))}
+                className="w-full border border-slate-200 rounded-lg p-2.5"
+                required
+              />
+              <input
+                type="password"
+                placeholder="Confirm Password"
+                value={resetForm.confirmPassword}
+                onChange={(e) => setResetForm((prev) => ({ ...prev, confirmPassword: e.target.value }))}
+                className="w-full border border-slate-200 rounded-lg p-2.5"
+                required
+              />
+
+              {resetError && <p className="text-sm text-red-600">{resetError}</p>}
+              {resetMessage && <p className="text-sm text-emerald-600">{resetMessage}</p>}
+
+              <button
+                type="submit"
+                disabled={resetLoading}
+                className="w-full bg-emerald-600 text-white rounded-xl py-2.5 hover:bg-emerald-700 transition-colors flex justify-center"
+              >
+                {resetLoading ? <Loader2 size={18} className="animate-spin" /> : 'Update Password'}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {showSuperAdminModal && (
+        <div className="fixed inset-0 bg-slate-900/60 flex items-center justify-center p-4 z-50">
+          <div className="bg-white w-full max-w-2xl rounded-2xl shadow-xl max-h-[90vh] overflow-y-auto">
+            <div className="p-5 border-b border-slate-100 flex items-center justify-between">
+              <h3 className="text-lg font-bold text-slate-800">Super Admin Portal</h3>
+              <button onClick={closeSuperAdminModal} className="text-slate-400 hover:text-slate-600">
+                <X size={20} />
+              </button>
+            </div>
+
+            {!superAdminToken ? (
+              <form onSubmit={handleSuperAdminLogin} className="p-5 space-y-4">
+                <input
+                  type="email"
+                  value={superAdminEmail}
+                  onChange={(e) => setSuperAdminEmail(e.target.value)}
+                  placeholder="Super Admin Email"
+                  className="w-full border border-slate-200 rounded-lg p-2.5"
+                  required
+                />
+                <input
+                  type="password"
+                  value={superAdminPassword}
+                  onChange={(e) => setSuperAdminPassword(e.target.value)}
+                  placeholder="Super Admin Password"
+                  className="w-full border border-slate-200 rounded-lg p-2.5"
+                  required
+                />
+                {superAdminError && <p className="text-sm text-red-600">{superAdminError}</p>}
+                <button
+                  type="submit"
+                  disabled={superAdminLoading}
+                  className="w-full bg-slate-900 text-white rounded-xl py-2.5 hover:bg-slate-800 transition-colors flex justify-center"
+                >
+                  {superAdminLoading ? <Loader2 size={18} className="animate-spin" /> : 'Login as Super Admin'}
+                </button>
+              </form>
+            ) : (
+              <form onSubmit={handleCreateSchool} className="p-5 space-y-4">
+                <p className="text-sm text-slate-600">Logged in as <span className="font-semibold">{superAdminName}</span></p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <input placeholder="Driving School Name" value={schoolForm.schoolName} onChange={(e) => setSchoolForm((p) => ({ ...p, schoolName: e.target.value }))} className="border border-slate-200 rounded-lg p-2.5" required />
+                  <input placeholder="Driving School Owner Name" value={schoolForm.schoolOwnerName} onChange={(e) => setSchoolForm((p) => ({ ...p, schoolOwnerName: e.target.value }))} className="border border-slate-200 rounded-lg p-2.5" required />
+                  <input placeholder="Driving School Mobile Number" value={schoolForm.schoolMobileNumber} onChange={(e) => setSchoolForm((p) => ({ ...p, schoolMobileNumber: e.target.value }))} className="border border-slate-200 rounded-lg p-2.5" />
+                  <input placeholder="Driving School Email" value={schoolForm.schoolEmail} onChange={(e) => setSchoolForm((p) => ({ ...p, schoolEmail: e.target.value }))} className="border border-slate-200 rounded-lg p-2.5" />
+                  <input placeholder="Driving School Owner Email" value={schoolForm.ownerEmail} onChange={(e) => setSchoolForm((p) => ({ ...p, ownerEmail: e.target.value }))} className="border border-slate-200 rounded-lg p-2.5" required />
+                  <input placeholder="Driving School Owner Mobile" value={schoolForm.ownerMobile} onChange={(e) => setSchoolForm((p) => ({ ...p, ownerMobile: e.target.value }))} className="border border-slate-200 rounded-lg p-2.5" />
+                  <input placeholder="Driving School Location" value={schoolForm.schoolLocation} onChange={(e) => setSchoolForm((p) => ({ ...p, schoolLocation: e.target.value }))} className="border border-slate-200 rounded-lg p-2.5" />
+                  <input placeholder="Driving School Password" type="password" value={schoolForm.password} onChange={(e) => setSchoolForm((p) => ({ ...p, password: e.target.value }))} className="border border-slate-200 rounded-lg p-2.5" required />
+                  <input placeholder="Location" value={schoolForm.location} onChange={(e) => setSchoolForm((p) => ({ ...p, location: e.target.value }))} className="border border-slate-200 rounded-lg p-2.5" />
+                  <input placeholder="City" value={schoolForm.city} onChange={(e) => setSchoolForm((p) => ({ ...p, city: e.target.value }))} className="border border-slate-200 rounded-lg p-2.5" />
+                  <input placeholder="Pincode" value={schoolForm.pincode} onChange={(e) => setSchoolForm((p) => ({ ...p, pincode: e.target.value }))} className="border border-slate-200 rounded-lg p-2.5 md:col-span-2" />
+                </div>
+                {schoolError && <p className="text-sm text-red-600">{schoolError}</p>}
+                {schoolMessage && <p className="text-sm text-emerald-600">{schoolMessage}</p>}
+                <button
+                  type="submit"
+                  disabled={schoolSaving}
+                  className="w-full bg-emerald-600 text-white rounded-xl py-2.5 hover:bg-emerald-700 transition-colors flex justify-center"
+                >
+                  {schoolSaving ? <Loader2 size={18} className="animate-spin" /> : 'Create Driving School'}
+                </button>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

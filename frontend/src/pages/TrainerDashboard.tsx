@@ -80,7 +80,7 @@ export default function TrainerDashboard() {
                   <div className="flex-1">
                     <h4 className="font-semibold text-slate-800">{s.course?.title}</h4>
                     <p className="text-sm text-slate-500">
-                      {format(new Date(s.startTime), 'h:mm a')} – {format(new Date(s.endTime), 'h:mm a')}
+                      {format(new Date(s.startTime), 'h:mm a')}
                     </p>
                     <p className="text-xs text-slate-400 mt-1">{s.attendances?.length || 0} students enrolled</p>
                   </div>
@@ -116,7 +116,7 @@ export default function TrainerDashboard() {
                   <div className="flex-1">
                     <h4 className="font-semibold text-slate-800">{s.course?.title}</h4>
                     <p className="text-sm text-slate-500">
-                      {format(new Date(s.startTime), 'h:mm a')} – {format(new Date(s.endTime), 'h:mm a')}
+                      {format(new Date(s.startTime), 'h:mm a')}
                     </p>
                     <p className="text-xs text-slate-400 mt-1">
                       {s.attendances?.filter((a: any) => a.status === 'PRESENT').length || 0} / {s.attendances?.length || 0} present
@@ -134,3 +134,4 @@ export default function TrainerDashboard() {
     </div>
   );
 }
+

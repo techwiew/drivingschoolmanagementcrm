@@ -21,9 +21,16 @@ const app = (0, express_1.default)();
 const prisma = new client_1.PrismaClient();
 const PORT = process.env.PORT || 5000;
 const JWT_SECRET = process.env.JWT_SECRET || 'driveflow-secret-2024';
+const corsOptions = {
+    origin: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    optionsSuccessStatus: 204
+};
 app.use((0, helmet_1.default)());
 app.use((0, compression_1.default)());
-app.use((0, cors_1.default)());
+app.use((0, cors_1.default)(corsOptions));
+app.options('*', (0, cors_1.default)(corsOptions));
 app.use(express_1.default.json());
 // Handle Vercel-style routing locally and on cPanel
 app.use((req, res, next) => {
@@ -48,20 +55,37 @@ const storage = multer_1.default.diskStorage({
 });
 const upload = (0, multer_1.default)({
     storage,
-    limits: { fileSize: 1024 * 1024 } // 1MB limit
+    limits: { fileSize: 1024 * 1024 }
 });
-// Authentication Middleware
 const authenticateToken = (req, res, next) => {
-    const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1];
+    if (req.method === 'OPTIONS')
+        return res.sendStatus(204);
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.split(' ')[1];
     if (!token)
         return res.status(401).json({ error: 'Access denied' });
-    jsonwebtoken_1.default.verify(token, JWT_SECRET, (err, user) => {
+    jsonwebtoken_1.default.verify(token, JWT_SECRET, (err, decoded) => {
         if (err)
             return res.status(403).json({ error: 'Invalid token' });
-        req.user = user;
+        req.user = decoded;
         next();
     });
+};
+const requireRoles = (...roles) => {
+    return (req, res, next) => {
+        if (!req.user || !roles.includes(req.user.role)) {
+            return res.status(403).json({ error: 'Forbidden' });
+        }
+        next();
+    };
+};
+const getSchoolUserOrFail = (req, res) => {
+    const user = req.user;
+    if (!user?.schoolId || !user.userId) {
+        res.status(403).json({ error: 'School context not found' });
+        return null;
+    }
+    return user;
 };
 // -----------------------------------------
 // PUBLIC ROUTES
@@ -69,10 +93,139 @@ const authenticateToken = (req, res, next) => {
 app.get('/api/health', (req, res) => {
     res.json({ status: 'OK', message: 'DriveFlow API is running' });
 });
+app.post('/api/super-admin/login', async (req, res) => {
+    try {
+        const { email, password } = req.body;
+        if (!email || !password) {
+            return res.status(400).json({ error: 'Email and password are required' });
+        }
+        let superAdmin = null;
+        try {
+            superAdmin = await prisma.superAdmin.findUnique({ where: { email } });
+        }
+        catch (error) {
+            superAdmin = null;
+        }
+        if (superAdmin && superAdmin.status === client_1.UserStatus.ACTIVE) {
+            const ok = await bcrypt_1.default.compare(password, superAdmin.passwordHash);
+            if (!ok)
+                return res.status(401).json({ error: 'Invalid credentials' });
+            const token = jsonwebtoken_1.default.sign({ role: 'SUPER_ADMIN', superAdminId: superAdmin.id, email: superAdmin.email }, JWT_SECRET, { expiresIn: '12h' });
+            return res.json({
+                token,
+                superAdmin: { id: superAdmin.id, name: superAdmin.name, email: superAdmin.email }
+            });
+        }
+        // Fallback env-based super admin (useful when DB table is not yet migrated)
+        const envEmail = process.env.SUPER_ADMIN_EMAIL;
+        const envPassword = process.env.SUPER_ADMIN_PASSWORD;
+        if (envEmail && envPassword && envEmail === email && envPassword === password) {
+            const token = jsonwebtoken_1.default.sign({ role: 'SUPER_ADMIN', superAdminId: 'env-super-admin', email }, JWT_SECRET, { expiresIn: '12h' });
+            return res.json({
+                token,
+                superAdmin: { id: 'env-super-admin', name: 'Super Admin', email }
+            });
+        }
+        return res.status(401).json({ error: 'Invalid credentials' });
+    }
+    catch (error) {
+        res.status(500).json({ error: 'Super admin login failed', details: error.message });
+    }
+});
+app.post('/api/super-admin/schools', authenticateToken, requireRoles('SUPER_ADMIN'), async (req, res) => {
+    try {
+        const { schoolName, schoolOwnerName, schoolMobileNumber, schoolEmail, ownerEmail, ownerMobile, schoolLocation, password, location, city, pincode } = req.body;
+        if (!schoolName || !schoolOwnerName || !ownerEmail || !password) {
+            return res.status(400).json({
+                error: 'schoolName, schoolOwnerName, ownerEmail and password are required'
+            });
+        }
+        const existingAdmin = await prisma.user.findUnique({ where: { email: ownerEmail } });
+        if (existingAdmin) {
+            return res.status(409).json({ error: 'Owner email already exists as a user' });
+        }
+        const [firstName, ...lastParts] = String(schoolOwnerName).trim().split(' ');
+        const lastName = lastParts.join(' ') || 'Owner';
+        const passwordHash = await bcrypt_1.default.hash(password, 10);
+        const result = await prisma.$transaction(async (tx) => {
+            const school = await tx.school.create({
+                data: {
+                    name: schoolName,
+                    contactEmail: schoolEmail || ownerEmail,
+                    mobile: schoolMobileNumber || null,
+                    ownerName: schoolOwnerName,
+                    ownerEmail: ownerEmail,
+                    ownerMobile: ownerMobile || null,
+                    location: schoolLocation || location || null,
+                    city: city || null,
+                    pincode: pincode || null
+                }
+            });
+            const adminUser = await tx.user.create({
+                data: {
+                    schoolId: school.id,
+                    email: ownerEmail,
+                    passwordHash,
+                    role: client_1.Role.ADMIN,
+                    firstName: firstName || 'School',
+                    lastName,
+                    phone: ownerMobile || null,
+                    location: schoolLocation || location || null
+                }
+            });
+            return { school, adminUser };
+        });
+        res.status(201).json({
+            message: 'Driving school created successfully',
+            school: result.school,
+            adminUser: {
+                id: result.adminUser.id,
+                email: result.adminUser.email,
+                role: result.adminUser.role,
+                schoolId: result.adminUser.schoolId
+            }
+        });
+    }
+    catch (error) {
+        res.status(500).json({ error: 'Failed to create driving school', details: error.message });
+    }
+});
+app.post('/api/auth/reset-password', async (req, res) => {
+    try {
+        const { mobile, email, role, password, confirmPassword } = req.body;
+        if (!mobile || !email || !role || !password || !confirmPassword) {
+            return res.status(400).json({ error: 'All fields are required' });
+        }
+        if (!['ADMIN', 'STUDENT', 'TRAINER'].includes(role)) {
+            return res.status(400).json({ error: 'Invalid role' });
+        }
+        if (password !== confirmPassword) {
+            return res.status(400).json({ error: 'Password and confirm password do not match' });
+        }
+        const user = await prisma.user.findFirst({
+            where: {
+                email,
+                phone: mobile,
+                role: role
+            }
+        });
+        if (!user) {
+            return res.status(404).json({ error: 'No account matched the provided details' });
+        }
+        const passwordHash = await bcrypt_1.default.hash(password, 10);
+        await prisma.user.update({
+            where: { id: user.id },
+            data: { passwordHash, status: client_1.UserStatus.ACTIVE }
+        });
+        res.json({ message: 'Password reset successful. You can now log in with your new password.' });
+    }
+    catch (error) {
+        res.status(500).json({ error: 'Failed to reset password', details: error.message });
+    }
+});
 // Seed: creates school + admin + trainer + student accounts
 app.post('/api/setup', async (req, res) => {
     try {
-        // Check if already set up
         const existing = await prisma.school.findFirst();
         if (existing) {
             return res.json({ message: 'Setup already complete. Use the existing credentials to log in.' });
@@ -85,42 +238,38 @@ app.post('/api/setup', async (req, res) => {
             bcrypt_1.default.hash('Trainer@123', 10),
             bcrypt_1.default.hash('Student@123', 10)
         ]);
-        // Create admin
         await prisma.user.create({
             data: {
                 schoolId: school.id,
                 email: 'admin@driveflow.com',
                 passwordHash: adminHash,
-                role: 'ADMIN',
+                role: client_1.Role.ADMIN,
                 firstName: 'Super',
                 lastName: 'Admin'
             }
         });
-        // Create trainer
         const trainerUser = await prisma.user.create({
             data: {
                 schoolId: school.id,
                 email: 'trainer@driveflow.com',
                 passwordHash: trainerHash,
-                role: 'TRAINER',
+                role: client_1.Role.TRAINER,
                 firstName: 'John',
                 lastName: 'Smith'
             }
         });
         await prisma.trainerProfile.create({ data: { userId: trainerUser.id } });
-        // Create student
         const studentUser = await prisma.user.create({
             data: {
                 schoolId: school.id,
                 email: 'student@driveflow.com',
                 passwordHash: studentHash,
-                role: 'STUDENT',
+                role: client_1.Role.STUDENT,
                 firstName: 'Jane',
                 lastName: 'Doe'
             }
         });
-        await prisma.studentProfile.create({ data: { userId: studentUser.id } });
-        // Create default course
+        const studentProfile = await prisma.studentProfile.create({ data: { userId: studentUser.id } });
         const course = await prisma.course.create({
             data: {
                 schoolId: school.id,
@@ -130,7 +279,6 @@ app.post('/api/setup', async (req, res) => {
                 price: 500
             }
         });
-        // Create a sample mock test with questions
         const test = await prisma.mockTest.create({
             data: {
                 schoolId: school.id,
@@ -170,38 +318,32 @@ app.post('/api/setup', async (req, res) => {
         for (const q of sampleQuestions) {
             await prisma.question.create({ data: { testId: test.id, ...q } });
         }
-        // Sample schedule
         const trainerProfile = await prisma.trainerProfile.findUnique({ where: { userId: trainerUser.id } });
         if (trainerProfile) {
             const nextWeek = new Date();
             nextWeek.setDate(nextWeek.getDate() + 7);
             nextWeek.setHours(10, 0, 0, 0);
-            const nextWeekEnd = new Date(nextWeek);
-            nextWeekEnd.setHours(11, 30, 0, 0);
             await prisma.classSchedule.create({
                 data: {
                     schoolId: school.id,
                     courseId: course.id,
                     trainerId: trainerProfile.id,
-                    startTime: nextWeek,
-                    endTime: nextWeekEnd
-                }
-            });
-        }
-        // Sample payment for student
-        const studentProfile = await prisma.studentProfile.findUnique({ where: { userId: studentUser.id } });
-        if (studentProfile) {
-            await prisma.payment.create({
-                data: {
-                    schoolId: school.id,
                     studentId: studentProfile.id,
-                    amount: 250,
-                    method: 'BANK_TRANSFER',
-                    status: 'PAID',
-                    notes: 'First installment'
+                    startTime: nextWeek,
+                    endTime: null
                 }
             });
         }
+        await prisma.payment.create({
+            data: {
+                schoolId: school.id,
+                studentId: studentProfile.id,
+                amount: 250,
+                method: 'BANK_TRANSFER',
+                status: 'PAID',
+                notes: 'First installment'
+            }
+        });
         res.json({
             message: 'Setup complete! You can now login with these credentials:',
             credentials: {
@@ -223,7 +365,7 @@ app.post('/api/auth/login', async (req, res) => {
             where: { email },
             include: { school: true }
         });
-        if (!user || user.status === 'LOCKED') {
+        if (!user || user.status === client_1.UserStatus.LOCKED) {
             return res.status(401).json({ error: 'Invalid credentials or account locked' });
         }
         const isValidPassword = await bcrypt_1.default.compare(password, user.passwordHash);
@@ -253,28 +395,91 @@ app.post('/api/auth/login', async (req, res) => {
 // PROTECTED ROUTES
 // -----------------------------------------
 app.use('/api', authenticateToken);
-// === USERS API ===
-// Get all users in the school
-app.get('/api/users', async (req, res) => {
+app.get('/api/users', requireRoles('ADMIN', 'TRAINER', 'STUDENT'), async (req, res) => {
     try {
-        const users = await prisma.user.findMany({
-            where: { schoolId: req.user.schoolId },
-            select: { id: true, email: true, firstName: true, lastName: true, role: true, status: true, phone: true, location: true, dateOfBirth: true, createdAt: true },
-            orderBy: { createdAt: 'desc' }
+        const authUser = getSchoolUserOrFail(req, res);
+        if (!authUser)
+            return;
+        if (authUser.role === 'ADMIN') {
+            const users = await prisma.user.findMany({
+                where: { schoolId: authUser.schoolId },
+                select: {
+                    id: true,
+                    email: true,
+                    firstName: true,
+                    lastName: true,
+                    role: true,
+                    status: true,
+                    phone: true,
+                    location: true,
+                    dateOfBirth: true,
+                    createdAt: true
+                },
+                orderBy: { createdAt: 'desc' }
+            });
+            return res.json(users);
+        }
+        if (authUser.role === 'TRAINER') {
+            const trainerProfile = await prisma.trainerProfile.findUnique({ where: { userId: authUser.userId } });
+            if (!trainerProfile)
+                return res.json([]);
+            const schedules = await prisma.classSchedule.findMany({
+                where: { schoolId: authUser.schoolId, trainerId: trainerProfile.id, studentId: { not: null } },
+                select: { studentId: true },
+                distinct: ['studentId']
+            });
+            const studentIds = schedules.map((s) => s.studentId).filter((v) => Boolean(v));
+            if (studentIds.length === 0)
+                return res.json([]);
+            const profiles = await prisma.studentProfile.findMany({
+                where: { id: { in: studentIds } },
+                include: { user: true }
+            });
+            const users = profiles.map((p) => ({
+                id: p.user.id,
+                email: p.user.email,
+                firstName: p.user.firstName,
+                lastName: p.user.lastName,
+                role: p.user.role,
+                status: p.user.status,
+                phone: p.user.phone,
+                location: p.user.location,
+                dateOfBirth: p.user.dateOfBirth,
+                createdAt: p.user.createdAt
+            }));
+            return res.json(users);
+        }
+        const self = await prisma.user.findFirst({
+            where: { id: authUser.userId, schoolId: authUser.schoolId },
+            select: {
+                id: true,
+                email: true,
+                firstName: true,
+                lastName: true,
+                role: true,
+                status: true,
+                phone: true,
+                location: true,
+                dateOfBirth: true,
+                createdAt: true
+            }
         });
-        res.json(users);
+        res.json(self ? [self] : []);
     }
     catch (error) {
-        res.status(500).json({ error: 'Failed to fetch users' });
+        res.status(500).json({ error: 'Failed to fetch users', details: error.message });
     }
 });
-app.post('/api/users', upload.array('documents', 4), async (req, res) => {
+app.post('/api/users', requireRoles('ADMIN'), upload.array('documents', 4), async (req, res) => {
     try {
+        const authUser = getSchoolUserOrFail(req, res);
+        if (!authUser)
+            return;
         const { email, password, firstName, lastName, role, phone, location, dateOfBirth } = req.body;
         const hashedPassword = await bcrypt_1.default.hash(password, 10);
         const user = await prisma.user.create({
             data: {
-                schoolId: req.user.schoolId,
+                schoolId: authUser.schoolId,
                 email,
                 passwordHash: hashedPassword,
                 firstName,
@@ -285,14 +490,12 @@ app.post('/api/users', upload.array('documents', 4), async (req, res) => {
                 dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null
             }
         });
-        // Create profile based on role
         if (role === 'STUDENT') {
             await prisma.studentProfile.create({ data: { userId: user.id } });
         }
         else if (role === 'TRAINER') {
             await prisma.trainerProfile.create({ data: { userId: user.id } });
         }
-        // Process documents
         if (req.files && Array.isArray(req.files)) {
             for (let i = 0; i < req.files.length; i++) {
                 const file = req.files[i];
@@ -309,18 +512,80 @@ app.post('/api/users', upload.array('documents', 4), async (req, res) => {
                 });
             }
         }
-        res.json({ message: 'User created successfully', user: { id: user.id, email: user.email } });
+        res.status(201).json({ message: 'User created successfully', user: { id: user.id, email: user.email } });
     }
     catch (error) {
         console.error(error);
         res.status(500).json({ error: 'Failed to create user', details: error.message });
     }
 });
-// Get user documents
-app.get('/api/users/:id/documents', async (req, res) => {
+app.put('/api/users/:id', requireRoles('ADMIN'), async (req, res) => {
     try {
+        const authUser = getSchoolUserOrFail(req, res);
+        if (!authUser)
+            return;
+        const targetUserId = String(req.params.id);
+        const target = await prisma.user.findFirst({
+            where: { id: targetUserId, schoolId: authUser.schoolId }
+        });
+        if (!target)
+            return res.status(404).json({ error: 'User not found' });
+        const { firstName, lastName, email, phone, location, dateOfBirth, status, password } = req.body;
+        const data = {};
+        if (typeof firstName === 'string')
+            data.firstName = firstName;
+        if (typeof lastName === 'string')
+            data.lastName = lastName;
+        if (typeof email === 'string')
+            data.email = email;
+        if (typeof phone === 'string')
+            data.phone = phone;
+        if (typeof location === 'string')
+            data.location = location;
+        if (typeof status === 'string' && ['ACTIVE', 'LOCKED'].includes(status))
+            data.status = status;
+        if (dateOfBirth)
+            data.dateOfBirth = new Date(dateOfBirth);
+        if (password)
+            data.passwordHash = await bcrypt_1.default.hash(password, 10);
+        const updated = await prisma.user.update({
+            where: { id: target.id },
+            data,
+            select: {
+                id: true,
+                email: true,
+                firstName: true,
+                lastName: true,
+                role: true,
+                status: true,
+                phone: true,
+                location: true,
+                dateOfBirth: true,
+                createdAt: true
+            }
+        });
+        res.json({ message: 'User updated', user: updated });
+    }
+    catch (error) {
+        res.status(500).json({ error: 'Failed to update user', details: error.message });
+    }
+});
+app.get('/api/users/:id/documents', requireRoles('ADMIN', 'TRAINER', 'STUDENT'), async (req, res) => {
+    try {
+        const authUser = getSchoolUserOrFail(req, res);
+        if (!authUser)
+            return;
+        const targetUserId = String(req.params.id);
+        const target = await prisma.user.findFirst({
+            where: { id: targetUserId, schoolId: authUser.schoolId }
+        });
+        if (!target)
+            return res.status(404).json({ error: 'User not found' });
+        if (authUser.role === 'STUDENT' && authUser.userId !== target.id) {
+            return res.status(403).json({ error: 'Forbidden' });
+        }
         const documents = await prisma.document.findMany({
-            where: { userId: req.params.id }
+            where: { userId: target.id }
         });
         res.json(documents);
     }
@@ -328,67 +593,211 @@ app.get('/api/users/:id/documents', async (req, res) => {
         res.status(500).json({ error: 'Failed to fetch documents', details: error.message });
     }
 });
-// Update user status (Lock/Unlock)
-app.patch('/api/users/:id/status', async (req, res) => {
+app.patch('/api/users/:id/status', requireRoles('ADMIN'), async (req, res) => {
     try {
+        const authUser = getSchoolUserOrFail(req, res);
+        if (!authUser)
+            return;
+        const targetUserId = String(req.params.id);
         const { status } = req.body;
+        if (!['ACTIVE', 'LOCKED'].includes(status)) {
+            return res.status(400).json({ error: 'Invalid status' });
+        }
+        const target = await prisma.user.findFirst({
+            where: { id: targetUserId, schoolId: authUser.schoolId }
+        });
+        if (!target)
+            return res.status(404).json({ error: 'User not found' });
         const user = await prisma.user.update({
-            where: { id: req.params.id },
+            where: { id: target.id },
             data: { status }
         });
         res.json({ message: 'Status updated', user: { id: user.id, status: user.status } });
     }
     catch (error) {
-        res.status(500).json({ error: 'Failed to update user status' });
+        res.status(500).json({ error: 'Failed to update user status', details: error.message });
     }
 });
-// Delete user
-app.delete('/api/users/:id', async (req, res) => {
+const deleteUserById = async (schoolId, targetUserId, actingUserId) => {
+    const user = await prisma.user.findFirst({
+        where: { id: targetUserId, schoolId }
+    });
+    if (!user)
+        return { status: 404, body: { error: 'User not found' } };
+    if (user.id === actingUserId)
+        return { status: 400, body: { error: 'You cannot delete your own account' } };
+    if (user.role === client_1.Role.TRAINER) {
+        const trainerProfile = await prisma.trainerProfile.findUnique({ where: { userId: user.id } });
+        if (trainerProfile) {
+            const activeScheduleCount = await prisma.classSchedule.count({
+                where: { trainerId: trainerProfile.id, schoolId, status: { not: 'CANCELLED' } }
+            });
+            if (activeScheduleCount > 0) {
+                return {
+                    status: 400,
+                    body: { error: 'Trainer has assigned schedules. Reassign or delete schedules before deleting trainer.' }
+                };
+            }
+        }
+    }
+    await prisma.$transaction(async (tx) => {
+        await tx.document.deleteMany({ where: { userId: user.id } });
+        if (user.role === client_1.Role.STUDENT) {
+            const studentProfile = await tx.studentProfile.findUnique({ where: { userId: user.id } });
+            if (studentProfile) {
+                await tx.attendance.deleteMany({ where: { studentId: studentProfile.id } });
+                await tx.payment.deleteMany({ where: { studentId: studentProfile.id } });
+                await tx.testResult.deleteMany({ where: { studentId: studentProfile.id } });
+                await tx.classSchedule.updateMany({
+                    where: { studentId: studentProfile.id },
+                    data: { studentId: null }
+                });
+                await tx.studentProfile.delete({ where: { id: studentProfile.id } });
+            }
+        }
+        if (user.role === client_1.Role.TRAINER) {
+            const trainerProfile = await tx.trainerProfile.findUnique({ where: { userId: user.id } });
+            if (trainerProfile) {
+                await tx.trainerProfile.delete({ where: { id: trainerProfile.id } });
+            }
+        }
+        await tx.user.delete({ where: { id: user.id } });
+    });
+    return { status: 200, body: { message: 'User deleted successfully', deletedUserId: user.id } };
+};
+app.delete('/api/users/:id', requireRoles('ADMIN'), async (req, res) => {
     try {
-        const user = await prisma.user.findUnique({ where: { id: req.params.id } });
-        if (user?.role === 'STUDENT')
-            await prisma.studentProfile.deleteMany({ where: { userId: user.id } });
-        if (user?.role === 'TRAINER')
-            await prisma.trainerProfile.deleteMany({ where: { userId: user.id } });
-        await prisma.user.delete({ where: { id: req.params.id } });
-        res.json({ message: 'User deleted' });
+        const authUser = getSchoolUserOrFail(req, res);
+        if (!authUser)
+            return;
+        const targetUserId = String(req.params.id);
+        const result = await deleteUserById(authUser.schoolId, targetUserId, authUser.userId);
+        res.status(result.status).json(result.body);
     }
     catch (error) {
-        console.log(error);
-        res.status(500).json({ error: 'Failed to delete user' });
+        console.error(error);
+        res.status(500).json({ error: 'Failed to delete user', details: error.message });
     }
 });
-// Get current user's own profile (for student/trainer dashboard)
-app.get('/api/profile', async (req, res) => {
+// Fallback for hosting environments that block DELETE at edge level.
+app.post('/api/users/:id/delete', requireRoles('ADMIN'), async (req, res) => {
     try {
-        if (req.user.role === 'STUDENT') {
+        const authUser = getSchoolUserOrFail(req, res);
+        if (!authUser)
+            return;
+        const targetUserId = String(req.params.id);
+        const result = await deleteUserById(authUser.schoolId, targetUserId, authUser.userId);
+        res.status(result.status).json(result.body);
+    }
+    catch (error) {
+        res.status(500).json({ error: 'Failed to delete user', details: error.message });
+    }
+});
+app.get('/api/attendance', requireRoles('ADMIN', 'TRAINER', 'STUDENT'), async (req, res) => {
+    try {
+        const authUser = getSchoolUserOrFail(req, res);
+        if (!authUser)
+            return;
+        if (authUser.role === 'STUDENT') {
+            const studentProfile = await prisma.studentProfile.findUnique({ where: { userId: authUser.userId } });
+            if (!studentProfile)
+                return res.json([]);
+            const attendances = await prisma.attendance.findMany({
+                where: { studentId: studentProfile.id },
+                include: {
+                    schedule: {
+                        include: {
+                            course: true,
+                            trainer: { include: { user: true } },
+                            student: { include: { user: true } }
+                        }
+                    }
+                },
+                orderBy: { schedule: { startTime: 'desc' } }
+            });
+            return res.json(attendances);
+        }
+        if (authUser.role === 'TRAINER') {
+            const trainerProfile = await prisma.trainerProfile.findUnique({ where: { userId: authUser.userId } });
+            if (!trainerProfile)
+                return res.json([]);
+            const attendances = await prisma.attendance.findMany({
+                where: {
+                    schedule: {
+                        schoolId: authUser.schoolId,
+                        trainerId: trainerProfile.id
+                    }
+                },
+                include: {
+                    student: { include: { user: true } },
+                    schedule: { include: { course: true, student: { include: { user: true } } } }
+                },
+                orderBy: { schedule: { startTime: 'desc' } }
+            });
+            return res.json(attendances);
+        }
+        const attendances = await prisma.attendance.findMany({
+            where: { schedule: { schoolId: authUser.schoolId } },
+            include: {
+                student: { include: { user: true } },
+                schedule: {
+                    include: {
+                        course: true,
+                        trainer: { include: { user: true } },
+                        student: { include: { user: true } }
+                    }
+                }
+            },
+            orderBy: { schedule: { startTime: 'desc' } }
+        });
+        res.json(attendances);
+    }
+    catch (error) {
+        res.status(500).json({ error: 'Failed to fetch attendance', details: error.message });
+    }
+});
+app.get('/api/profile', requireRoles('ADMIN', 'TRAINER', 'STUDENT'), async (req, res) => {
+    try {
+        const authUser = getSchoolUserOrFail(req, res);
+        if (!authUser)
+            return;
+        if (authUser.role === 'STUDENT') {
             const profile = await prisma.studentProfile.findUnique({
-                where: { userId: req.user.userId },
+                where: { userId: authUser.userId },
                 include: {
                     payments: true,
                     testResults: { include: { test: true } },
-                    attendances: { include: { schedule: { include: { course: true, trainer: { include: { user: true } } } } } }
+                    attendances: {
+                        include: {
+                            schedule: {
+                                include: {
+                                    course: true,
+                                    trainer: { include: { user: true } },
+                                    student: { include: { user: true } }
+                                }
+                            }
+                        }
+                    }
                 }
             });
-            res.json(profile);
+            return res.json(profile);
         }
-        else if (req.user.role === 'TRAINER') {
+        if (authUser.role === 'TRAINER') {
             const profile = await prisma.trainerProfile.findUnique({
-                where: { userId: req.user.userId },
+                where: { userId: authUser.userId },
                 include: {
                     classes: {
                         include: {
                             course: true,
+                            student: { include: { user: true } },
                             attendances: { include: { student: { include: { user: true } } } }
                         }
                     }
                 }
             });
-            res.json(profile);
+            return res.json(profile);
         }
-        else {
-            res.json({ role: 'ADMIN' });
-        }
+        res.json({ role: 'ADMIN' });
     }
     catch (error) {
         res.status(500).json({ error: 'Failed to fetch profile', details: error.message });
@@ -397,11 +806,10 @@ app.get('/api/profile', async (req, res) => {
 app.use('/api/schedules', schedule_1.default);
 app.use('/api/payments', payments_1.default);
 app.use('/api/mock-tests', mockTests_1.default);
-// 404 Fallback for unmatched routes
 app.use((req, res) => {
     res.status(404).json({
         success: false,
-        message: "Route not found"
+        message: 'Route not found'
     });
 });
 app.listen(PORT, () => {
