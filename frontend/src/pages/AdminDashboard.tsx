@@ -5,6 +5,11 @@ import { Users, Calendar, TrendingUp, CreditCard, Loader2, Clock, ChevronRight }
 import { format } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
 
+const isSameMonth = (value: string, date: Date) => {
+  const parsed = new Date(value);
+  return parsed.getFullYear() === date.getFullYear() && parsed.getMonth() === date.getMonth();
+};
+
 export default function AdminDashboard() {
   const { user } = useAuthStore();
   const navigate = useNavigate();
@@ -38,6 +43,18 @@ export default function AdminDashboard() {
   const upcoming  = schedules.filter(s => s.status === 'SCHEDULED');
   const revenue   = payments.filter(p => p.status === 'PAID').reduce((a, c) => a + c.amount, 0);
   const pending   = payments.filter(p => p.status === 'PENDING').reduce((a, c) => a + c.amount, 0);
+  const now = new Date();
+  const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const currentMonthStudents = students.filter(s => isSameMonth(s.createdAt, now)).length;
+  const lastMonthStudents = students.filter(s => isSameMonth(s.createdAt, lastMonth)).length;
+  const collectedThisMonth = payments
+    .filter(p => p.status === 'PAID' && isSameMonth(p.createdAt, now))
+    .reduce((a, c) => a + c.amount, 0);
+  const outstandingBalance = students.reduce((acc, student) => acc + Math.max(student.studentProfile?.balanceDue || 0, 0), 0);
+  const paidPayments = payments.filter(p => p.status === 'PAID');
+  const averagePayment = paidPayments.length ? revenue / paidPayments.length : 0;
+  const monthClasses = schedules.filter(s => isSameMonth(s.startTime, now));
+  const completedClasses = schedules.filter(s => s.status === 'COMPLETED').length;
 
   const stats = [
     { title: 'Total Students', value: loading ? '...' : students.length, sub: `${allUsers.length} total users`, icon: <Users size={22} />, color: 'bg-blue-500' },
@@ -75,6 +92,33 @@ export default function AdminDashboard() {
             </div>
           </div>
         ))}
+      </div>
+
+      <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+        <div className="flex items-center justify-between mb-5">
+          <div>
+            <h2 className="text-lg font-bold text-slate-800">Business Analytics</h2>
+            <p className="text-sm text-slate-500">{format(now, 'MMMM yyyy')} performance snapshot</p>
+          </div>
+          <button onClick={() => navigate('/payments')} className="text-sm text-emerald-600 hover:underline flex items-center gap-1">
+            Payments <ChevronRight size={14} />
+          </button>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+          {[
+            { label: 'Students This Month', value: currentMonthStudents, detail: `${lastMonthStudents} last month` },
+            { label: 'Collected This Month', value: `$${collectedThisMonth.toFixed(0)}`, detail: `$${revenue.toFixed(0)} all time` },
+            { label: 'Outstanding Balance', value: `$${outstandingBalance.toFixed(0)}`, detail: `$${pending.toFixed(0)} pending records` },
+            { label: 'Average Payment', value: `$${averagePayment.toFixed(0)}`, detail: `${paidPayments.length} collected payments` },
+            { label: 'Classes This Month', value: monthClasses.length, detail: `${completedClasses} completed total` }
+          ].map(item => (
+            <div key={item.label} className="rounded-xl border border-slate-100 bg-slate-50 p-4">
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">{item.label}</p>
+              <p className="text-2xl font-bold text-slate-800 mt-2">{loading ? '...' : item.value}</p>
+              <p className="text-xs text-slate-400 mt-1">{loading ? 'Loading' : item.detail}</p>
+            </div>
+          ))}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

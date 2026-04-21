@@ -3,6 +3,17 @@ import { api } from '../lib/axios';
 import { useAuthStore } from '../store/authStore';
 import { FileText, Plus, Search, Clock, CheckCircle, HelpCircle, X, Loader2 } from 'lucide-react';
 
+type Notice = { type: 'success' | 'error'; text: string } | null;
+
+const getErrorMessage = (err: any, fallback: string) =>
+  err.response?.data?.error || err.response?.data?.details || err.message || fallback;
+
+const RequiredLabel = ({ children }: { children: React.ReactNode }) => (
+  <label className="block text-sm font-medium text-slate-700 mb-1">
+    {children} <span className="text-red-500">*</span>
+  </label>
+);
+
 export default function MockTests() {
   const { user } = useAuthStore();
   const [tests, setTests] = useState<any[]>([]);
@@ -11,6 +22,7 @@ export default function MockTests() {
   const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState({ title: '', description: '', passingScore: '70', timeLimitMinutes: '30' });
   const [searchTerm, setSearchTerm] = useState('');
+  const [notice, setNotice] = useState<Notice>(null);
 
   const fetchTests = async () => {
     try {
@@ -28,13 +40,15 @@ export default function MockTests() {
   const handleCreateTest = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
+    setNotice(null);
     try {
       await api.post('/mock-tests', formData);
       setIsCreateOpen(false);
       setFormData({ title: '', description: '', passingScore: '70', timeLimitMinutes: '30' });
+      setNotice({ type: 'success', text: `${formData.title} was created successfully.` });
       fetchTests();
-    } catch (err) {
-      alert('Failed to create mock test');
+    } catch (err: any) {
+      setNotice({ type: 'error', text: getErrorMessage(err, 'Cannot create mock test right now.') });
     } finally {
       setSaving(false);
     }
@@ -64,6 +78,16 @@ export default function MockTests() {
           </button>
         )}
       </div>
+
+      {notice && (
+        <div className={`rounded-xl border px-4 py-3 text-sm font-medium ${
+          notice.type === 'success'
+            ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+            : 'border-red-200 bg-red-50 text-red-700'
+        }`}>
+          {notice.text}
+        </div>
+      )}
 
       <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
         <div className="p-4 border-b border-slate-100 bg-slate-50/50">
@@ -142,7 +166,7 @@ export default function MockTests() {
             </div>
             <form onSubmit={handleCreateTest} className="p-6 space-y-4">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Test Title</label>
+                <RequiredLabel>Test Title</RequiredLabel>
                 <input
                   type="text" required value={formData.title}
                   onChange={e => setFormData({ ...formData, title: e.target.value })}
@@ -162,14 +186,14 @@ export default function MockTests() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Passing Score (%)</label>
+                  <RequiredLabel>Passing Score (%)</RequiredLabel>
                   <input type="number" required min="1" max="100" value={formData.passingScore}
                     onChange={e => setFormData({ ...formData, passingScore: e.target.value })}
                     className="w-full border border-slate-200 rounded-lg p-2.5 focus:ring-2 focus:ring-emerald-500 outline-none"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Time Limit (mins)</label>
+                  <RequiredLabel>Time Limit (mins)</RequiredLabel>
                   <input type="number" required min="1" value={formData.timeLimitMinutes}
                     onChange={e => setFormData({ ...formData, timeLimitMinutes: e.target.value })}
                     className="w-full border border-slate-200 rounded-lg p-2.5 focus:ring-2 focus:ring-emerald-500 outline-none"

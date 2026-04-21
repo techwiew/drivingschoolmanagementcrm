@@ -4,6 +4,11 @@ import { CheckCircle, ChevronDown, ChevronUp, Clock, Loader2, Users, XCircle } f
 import { api } from '../lib/axios';
 import { useAuthStore } from '../store/authStore';
 
+type Notice = { type: 'success' | 'error'; text: string } | null;
+
+const getErrorMessage = (err: any, fallback: string) =>
+  err.response?.data?.error || err.response?.data?.details || err.message || fallback;
+
 export default function Attendance() {
   const { user } = useAuthStore();
   const [schedules, setSchedules] = useState<any[]>([]);
@@ -13,6 +18,7 @@ export default function Attendance() {
   const [loadingStudents, setLoadingStudents] = useState<string | null>(null);
   const [markingMap, setMarkingMap] = useState<Record<string, Record<string, 'PRESENT' | 'ABSENT'>>>({});
   const [savingScheduleId, setSavingScheduleId] = useState<string | null>(null);
+  const [notice, setNotice] = useState<Notice>(null);
 
   const canMarkAttendance = user?.role === 'ADMIN' || user?.role === 'TRAINER';
 
@@ -69,6 +75,7 @@ export default function Attendance() {
 
   const saveAttendance = async (scheduleId: string) => {
     setSavingScheduleId(scheduleId);
+    setNotice(null);
     try {
       const studentStatuses = markingMap[scheduleId] || {};
       const attendance = Object.entries(studentStatuses).map(([studentProfileId, status]) => ({
@@ -80,9 +87,10 @@ export default function Attendance() {
       await api.patch(`/schedules/${scheduleId}/status`, { status: 'COMPLETED' });
 
       await fetchSchedules();
-      alert('Attendance saved successfully.');
+      const savedCount = attendance.length;
+      setNotice({ type: 'success', text: `Attendance saved successfully for ${savedCount} student${savedCount === 1 ? '' : 's'}.` });
     } catch (err: any) {
-      alert('Failed to save attendance: ' + (err.response?.data?.error || err.message));
+      setNotice({ type: 'error', text: getErrorMessage(err, 'Cannot save attendance right now.') });
     } finally {
       setSavingScheduleId(null);
     }
@@ -98,6 +106,16 @@ export default function Attendance() {
             : 'You can view only your attendance records.'}
         </p>
       </div>
+
+      {notice && (
+        <div className={`rounded-xl border px-4 py-3 text-sm font-medium ${
+          notice.type === 'success'
+            ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+            : 'border-red-200 bg-red-50 text-red-700'
+        }`}>
+          {notice.text}
+        </div>
+      )}
 
       {loading ? (
         <div className="flex justify-center py-16">

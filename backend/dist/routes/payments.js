@@ -14,6 +14,31 @@ const getAuthUser = (req, res) => {
     }
     return req.user;
 };
+const syncStudentPaymentSummary = async (tx, studentProfileId) => {
+    const [studentProfile, paidAggregate] = await Promise.all([
+        tx.studentProfile.findUnique({
+            where: { id: studentProfileId },
+            include: { user: true }
+        }),
+        tx.payment.aggregate({
+            where: { studentId: studentProfileId, status: 'PAID' },
+            _sum: { amount: true }
+        })
+    ]);
+    if (!studentProfile) {
+        throw new Error('Student profile not found while syncing payment summary.');
+    }
+    const paidTotal = paidAggregate._sum.amount ?? 0;
+    const agreedDealAmount = Math.max(studentProfile.totalPaid + studentProfile.balanceDue, paidTotal);
+    return tx.studentProfile.update({
+        where: { id: studentProfileId },
+        data: {
+            totalPaid: paidTotal,
+            balanceDue: Math.max(agreedDealAmount - paidTotal, 0)
+        },
+        include: { user: true }
+    });
+};
 // Get all payments for the school (or just student's own)
 router.get('/', async (req, res) => {
     try {
@@ -31,7 +56,15 @@ router.get('/', async (req, res) => {
             include: { student: { include: { user: true } } },
             orderBy: { createdAt: 'desc' }
         });
-        res.json(payments);
+        const paymentsWithSummary = payments.map((payment) => {
+            const agreedDealAmount = Math.max((payment.student.totalPaid || 0) + (payment.student.balanceDue || 0), payment.amount);
+            return {
+                ...payment,
+                dealAmount: agreedDealAmount,
+                remainingAmount: Math.max(payment.student.balanceDue || 0, 0)
+            };
+        });
+        res.json(paymentsWithSummary);
     }
     catch (error) {
         res.status(500).json({ error: 'Failed to fetch payments', details: error.message });
@@ -49,6 +82,10 @@ router.post('/', async (req, res) => {
         if (!studentId || amount === undefined) {
             return res.status(400).json({ error: 'studentId and amount are required' });
         }
+        const parsedAmount = parseFloat(String(amount));
+        if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+            return res.status(400).json({ error: 'Cannot record payment because the amount is invalid.' });
+        }
         let resolvedStudentId = String(studentId);
         const studentByUserId = await prisma.studentProfile.findUnique({ where: { userId: resolvedStudentId } });
         if (studentByUserId) {
@@ -61,19 +98,32 @@ router.post('/', async (req, res) => {
             }
             resolvedStudentId = directProfile.id;
         }
-        const payment = await prisma.payment.create({
-            data: {
-                schoolId: authUser.schoolId,
-                studentId: resolvedStudentId,
-                amount: parseFloat(String(amount)),
-                method: method || 'CASH',
-                status: status || 'PAID',
-                notes: notes || null,
-                dueDate: new Date()
-            },
-            include: { student: { include: { user: true } } }
+        const paymentStatus = String(status || 'PAID').toUpperCase();
+        if (!['PAID', 'PENDING', 'FAILED'].includes(paymentStatus)) {
+            return res.status(400).json({ error: 'Cannot record payment because the status is invalid.' });
+        }
+        const result = await prisma.$transaction(async (tx) => {
+            const payment = await tx.payment.create({
+                data: {
+                    schoolId: authUser.schoolId,
+                    studentId: resolvedStudentId,
+                    amount: parsedAmount,
+                    method: method || 'CASH',
+                    status: paymentStatus,
+                    notes: notes || null,
+                    dueDate: new Date()
+                },
+                include: { student: { include: { user: true } } }
+            });
+            const updatedProfile = await syncStudentPaymentSummary(tx, resolvedStudentId);
+            return { payment, updatedProfile };
         });
-        res.status(201).json({ message: 'Payment recorded successfully', payment });
+        res.status(201).json({
+            message: `Collected ${result.payment.amount.toFixed(2)} from ${result.payment.student.user.firstName} ${result.payment.student.user.lastName}. Remaining balance: ${Math.max(result.updatedProfile.balanceDue, 0).toFixed(2)}.`,
+            payment: result.payment,
+            collectedAmount: result.payment.status === 'PAID' ? result.payment.amount : 0,
+            remainingAmount: Math.max(result.updatedProfile.balanceDue, 0)
+        });
     }
     catch (error) {
         console.error(error);
@@ -88,12 +138,34 @@ router.patch('/:id/status', async (req, res) => {
             return;
         if (authUser.role !== 'ADMIN')
             return res.status(403).json({ error: 'Only admin can update payment status' });
-        const { status } = req.body;
-        const payment = await prisma.payment.update({
-            where: { id: String(req.params.id) },
-            data: { status }
+        const nextStatus = String(req.body.status || '').toUpperCase();
+        if (!['PAID', 'PENDING', 'FAILED'].includes(nextStatus)) {
+            return res.status(400).json({ error: 'Cannot update payment because the status is invalid.' });
+        }
+        const existing = await prisma.payment.findFirst({
+            where: { id: String(req.params.id), schoolId: authUser.schoolId },
+            include: { student: { include: { user: true } } }
         });
-        res.json({ message: 'Payment status updated', payment });
+        if (!existing)
+            return res.status(404).json({ error: 'Payment not found' });
+        const result = await prisma.$transaction(async (tx) => {
+            const payment = await tx.payment.update({
+                where: { id: existing.id },
+                data: { status: nextStatus },
+                include: { student: { include: { user: true } } }
+            });
+            const updatedProfile = await syncStudentPaymentSummary(tx, existing.studentId);
+            const newlyCollected = existing.status !== 'PAID' && nextStatus === 'PAID';
+            return { payment, updatedProfile, newlyCollected };
+        });
+        res.json({
+            message: result.newlyCollected
+                ? `Collected ${existing.amount.toFixed(2)} from ${existing.student.user.firstName} ${existing.student.user.lastName}. Remaining balance: ${Math.max(result.updatedProfile.balanceDue, 0).toFixed(2)}.`
+                : 'Payment status updated.',
+            payment: result.payment,
+            collectedAmount: result.newlyCollected ? existing.amount : 0,
+            remainingAmount: Math.max(result.updatedProfile.balanceDue, 0)
+        });
     }
     catch (error) {
         res.status(500).json({ error: 'Failed to update payment', details: error.message });

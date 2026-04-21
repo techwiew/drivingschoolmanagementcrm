@@ -4,6 +4,20 @@ import { useAuthStore } from '../store/authStore';
 import { CreditCard, Plus, Search, CheckCircle, Clock, X, Loader2, AlertCircle } from 'lucide-react';
 import { format } from 'date-fns';
 
+type Notice = { type: 'success' | 'error'; text: string } | null;
+
+const getErrorMessage = (err: any, fallback: string) =>
+  err.response?.data?.error || err.response?.data?.details || err.message || fallback;
+
+const RequiredLabel = ({ children }: { children: React.ReactNode }) => (
+  <label className="block text-sm font-medium text-slate-700 mb-1">
+    {children} <span className="text-red-500">*</span>
+  </label>
+);
+
+const getStudentDealAmount = (student: any) =>
+  Math.max((student?.studentProfile?.totalPaid || 0) + (student?.studentProfile?.balanceDue || 0), 0);
+
 export default function Payments() {
   const { user } = useAuthStore();
   const [payments, setPayments] = useState<any[]>([]);
@@ -13,6 +27,8 @@ export default function Payments() {
   const [saving, setSaving] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [formData, setFormData] = useState({ studentId: '', amount: '', method: 'CASH', status: 'PAID', notes: '' });
+  const [notice, setNotice] = useState<Notice>(null);
+  const [collectingId, setCollectingId] = useState<string | null>(null);
 
   const fetchPayments = async () => {
     try {
@@ -42,15 +58,31 @@ export default function Payments() {
   const handleRecordPayment = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
+    setNotice(null);
     try {
-      await api.post('/payments', formData);
+      const res = await api.post('/payments', formData);
       setIsModalOpen(false);
       setFormData({ studentId: '', amount: '', method: 'CASH', status: 'PAID', notes: '' });
+      setNotice({ type: 'success', text: res.data?.message || 'Payment recorded successfully.' });
       fetchPayments();
     } catch (err: any) {
-      alert('Failed to record payment: ' + (err.response?.data?.details || err.message));
+      setNotice({ type: 'error', text: getErrorMessage(err, 'Cannot record payment right now.') });
     } finally {
       setSaving(false);
+    }
+  };
+
+  const markCollected = async (paymentId: string) => {
+    setCollectingId(paymentId);
+    setNotice(null);
+    try {
+      const res = await api.patch(`/payments/${paymentId}/status`, { status: 'PAID' });
+      setNotice({ type: 'success', text: res.data?.message || 'Payment marked as collected.' });
+      fetchPayments();
+    } catch (err: any) {
+      setNotice({ type: 'error', text: getErrorMessage(err, 'Cannot mark payment as collected right now.') });
+    } finally {
+      setCollectingId(null);
     }
   };
 
@@ -61,6 +93,9 @@ export default function Payments() {
   const totalPending = payments
     .filter(p => p.status === 'PENDING')
     .reduce((acc, curr) => acc + curr.amount, 0);
+
+  const remainingBalance = students.reduce((acc, student) => acc + Math.max(student.studentProfile?.balanceDue || 0, 0), 0);
+  const selectedStudent = students.find((student) => student.id === formData.studentId);
 
   const filtered = payments.filter(p => {
     const name = `${p.student?.user?.firstName} ${p.student?.user?.lastName}`.toLowerCase();
@@ -90,6 +125,16 @@ export default function Payments() {
         )}
       </div>
 
+      {notice && (
+        <div className={`rounded-xl border px-4 py-3 text-sm font-medium ${
+          notice.type === 'success'
+            ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+            : 'border-red-200 bg-red-50 text-red-700'
+        }`}>
+          {notice.text}
+        </div>
+      )}
+
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4">
@@ -108,6 +153,7 @@ export default function Payments() {
           <div>
             <p className="text-sm text-slate-500 font-medium">Pending Payments</p>
             <p className="text-2xl font-bold text-slate-800">${totalPending.toFixed(2)}</p>
+            <p className="text-xs text-slate-400 mt-1">${remainingBalance.toFixed(2)} remaining balance</p>
           </div>
         </div>
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4">
@@ -149,7 +195,9 @@ export default function Payments() {
                 <th className="px-6 py-4 font-medium">Amount</th>
                 <th className="px-6 py-4 font-medium">Method</th>
                 <th className="px-6 py-4 font-medium">Status</th>
+                <th className="px-6 py-4 font-medium">Remaining</th>
                 <th className="px-6 py-4 font-medium">Notes</th>
+                {user?.role === 'ADMIN' && <th className="px-6 py-4 font-medium text-right">Actions</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -174,12 +222,31 @@ export default function Payments() {
                       {p.status}
                     </span>
                   </td>
-                  <td className="px-6 py-4 text-sm text-slate-500">{p.notes || '—'}</td>
+                  <td className="px-6 py-4 text-sm font-semibold text-slate-700">
+                    ${Math.max((p.remainingAmount ?? p.student?.balanceDue ?? 0), 0).toFixed(2)}
+                  </td>
+                  <td className="px-6 py-4 text-sm text-slate-500">{p.notes || '-'}</td>
+                  {user?.role === 'ADMIN' && (
+                    <td className="px-6 py-4 text-right">
+                      {p.status === 'PENDING' ? (
+                        <button
+                          onClick={() => markCollected(p.id)}
+                          disabled={collectingId === p.id}
+                          className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-700 disabled:opacity-50"
+                        >
+                          {collectingId === p.id && <Loader2 className="animate-spin" size={14} />}
+                          Mark Collected
+                        </button>
+                      ) : (
+                        <span className="text-xs text-slate-400">No action</span>
+                      )}
+                    </td>
+                  )}
                 </tr>
               ))}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="p-12 text-center text-slate-400">
+                  <td colSpan={user?.role === 'ADMIN' ? 8 : 7} className="p-12 text-center text-slate-400">
                     <AlertCircle size={32} className="mx-auto mb-3 opacity-40" />
                     No payment records found.
                   </td>
@@ -202,7 +269,7 @@ export default function Payments() {
             </div>
             <form onSubmit={handleRecordPayment} className="p-6 space-y-4">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Select Student</label>
+                <RequiredLabel>Select Student</RequiredLabel>
                 <select
                   required value={formData.studentId}
                   onChange={e => setFormData({ ...formData, studentId: e.target.value })}
@@ -214,8 +281,13 @@ export default function Payments() {
                   ))}
                 </select>
               </div>
+              {selectedStudent?.studentProfile && (
+                <div className="rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+                  Deal: ${getStudentDealAmount(selectedStudent).toFixed(2)} | Paid: ${selectedStudent.studentProfile.totalPaid.toFixed(2)} | Remaining: ${Math.max(selectedStudent.studentProfile.balanceDue || 0, 0).toFixed(2)}
+                </div>
+              )}
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Amount ($)</label>
+                <RequiredLabel>Amount ($)</RequiredLabel>
                 <input
                   type="number" step="0.01" required value={formData.amount}
                   onChange={e => setFormData({ ...formData, amount: e.target.value })}
@@ -225,7 +297,7 @@ export default function Payments() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Method</label>
+                  <RequiredLabel>Method</RequiredLabel>
                   <select value={formData.method} onChange={e => setFormData({ ...formData, method: e.target.value })} className="w-full border border-slate-200 rounded-lg p-2.5 focus:ring-2 focus:ring-emerald-500 outline-none">
                     <option value="CASH">Cash</option>
                     <option value="CREDIT_CARD">Credit Card</option>
@@ -234,7 +306,7 @@ export default function Payments() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Status</label>
+                  <RequiredLabel>Status</RequiredLabel>
                   <select value={formData.status} onChange={e => setFormData({ ...formData, status: e.target.value })} className="w-full border border-slate-200 rounded-lg p-2.5 focus:ring-2 focus:ring-emerald-500 outline-none">
                     <option value="PAID">Paid</option>
                     <option value="PENDING">Pending</option>

@@ -30,7 +30,6 @@ const corsOptions = {
 app.use((0, helmet_1.default)());
 app.use((0, compression_1.default)());
 app.use((0, cors_1.default)(corsOptions));
-app.options('*', (0, cors_1.default)(corsOptions));
 app.use(express_1.default.json());
 // Handle Vercel-style routing locally and on cPanel
 app.use((req, res, next) => {
@@ -413,7 +412,8 @@ app.get('/api/users', requireRoles('ADMIN', 'TRAINER', 'STUDENT'), async (req, r
                     phone: true,
                     location: true,
                     dateOfBirth: true,
-                    createdAt: true
+                    createdAt: true,
+                    studentProfile: true
                 },
                 orderBy: { createdAt: 'desc' }
             });
@@ -445,7 +445,13 @@ app.get('/api/users', requireRoles('ADMIN', 'TRAINER', 'STUDENT'), async (req, r
                 phone: p.user.phone,
                 location: p.user.location,
                 dateOfBirth: p.user.dateOfBirth,
-                createdAt: p.user.createdAt
+                createdAt: p.user.createdAt,
+                studentProfile: {
+                    id: p.id,
+                    licenseStatus: p.licenseStatus,
+                    totalPaid: p.totalPaid,
+                    balanceDue: p.balanceDue
+                }
             }));
             return res.json(users);
         }
@@ -461,7 +467,8 @@ app.get('/api/users', requireRoles('ADMIN', 'TRAINER', 'STUDENT'), async (req, r
                 phone: true,
                 location: true,
                 dateOfBirth: true,
-                createdAt: true
+                createdAt: true,
+                studentProfile: true
             }
         });
         res.json(self ? [self] : []);
@@ -475,27 +482,53 @@ app.post('/api/users', requireRoles('ADMIN'), upload.array('documents', 4), asyn
         const authUser = getSchoolUserOrFail(req, res);
         if (!authUser)
             return;
-        const { email, password, firstName, lastName, role, phone, location, dateOfBirth } = req.body;
+        const { email, password, firstName, lastName, role, phone, location, dateOfBirth, totalAmount } = req.body;
+        if (!email || !password || !firstName || !lastName || !role || !phone || !location || !dateOfBirth) {
+            return res.status(400).json({ error: 'Cannot create user because required fields are missing.' });
+        }
+        if (role === 'ADMIN') {
+            return res.status(403).json({ error: 'Cannot create admin users from the admin panel.' });
+        }
+        if (!['STUDENT', 'TRAINER'].includes(role)) {
+            return res.status(400).json({ error: 'Cannot create user because the selected role is invalid.' });
+        }
+        const parsedTotalAmount = totalAmount === '' || totalAmount === undefined ? 0 : Number(totalAmount);
+        if (role === 'STUDENT' && (!Number.isFinite(parsedTotalAmount) || parsedTotalAmount < 0)) {
+            return res.status(400).json({ error: 'Cannot create student because the total payment amount is invalid.' });
+        }
+        const existingUser = await prisma.user.findUnique({ where: { email } });
+        if (existingUser) {
+            return res.status(409).json({ error: 'Cannot create user because the email is already registered.' });
+        }
         const hashedPassword = await bcrypt_1.default.hash(password, 10);
-        const user = await prisma.user.create({
-            data: {
-                schoolId: authUser.schoolId,
-                email,
-                passwordHash: hashedPassword,
-                firstName,
-                lastName,
-                role,
-                phone,
-                location,
-                dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null
+        const user = await prisma.$transaction(async (tx) => {
+            const createdUser = await tx.user.create({
+                data: {
+                    schoolId: authUser.schoolId,
+                    email,
+                    passwordHash: hashedPassword,
+                    firstName,
+                    lastName,
+                    role,
+                    phone,
+                    location,
+                    dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null
+                }
+            });
+            if (role === 'STUDENT') {
+                await tx.studentProfile.create({
+                    data: {
+                        userId: createdUser.id,
+                        totalPaid: 0,
+                        balanceDue: parsedTotalAmount
+                    }
+                });
             }
+            else if (role === 'TRAINER') {
+                await tx.trainerProfile.create({ data: { userId: createdUser.id } });
+            }
+            return createdUser;
         });
-        if (role === 'STUDENT') {
-            await prisma.studentProfile.create({ data: { userId: user.id } });
-        }
-        else if (role === 'TRAINER') {
-            await prisma.trainerProfile.create({ data: { userId: user.id } });
-        }
         if (req.files && Array.isArray(req.files)) {
             for (let i = 0; i < req.files.length; i++) {
                 const file = req.files[i];
@@ -512,9 +545,15 @@ app.post('/api/users', requireRoles('ADMIN'), upload.array('documents', 4), asyn
                 });
             }
         }
-        res.status(201).json({ message: 'User created successfully', user: { id: user.id, email: user.email } });
+        res.status(201).json({
+            message: `${user.firstName} ${user.lastName} (${user.role}) was added successfully.`,
+            user: { id: user.id, email: user.email, firstName: user.firstName, lastName: user.lastName, role: user.role }
+        });
     }
     catch (error) {
+        if (error?.code === 'P2002' && Array.isArray(error?.meta?.target) && error.meta.target.includes('email')) {
+            return res.status(409).json({ error: 'Cannot create user because the email is already registered.' });
+        }
         console.error(error);
         res.status(500).json({ error: 'Failed to create user', details: error.message });
     }
@@ -663,7 +702,19 @@ const deleteUserById = async (schoolId, targetUserId, actingUserId) => {
         }
         await tx.user.delete({ where: { id: user.id } });
     });
-    return { status: 200, body: { message: 'User deleted successfully', deletedUserId: user.id } };
+    return {
+        status: 200,
+        body: {
+            message: `${user.firstName} ${user.lastName} (${user.role}) was removed successfully.`,
+            deletedUser: {
+                id: user.id,
+                email: user.email,
+                firstName: user.firstName,
+                lastName: user.lastName,
+                role: user.role
+            }
+        }
+    };
 };
 app.delete('/api/users/:id', requireRoles('ADMIN'), async (req, res) => {
     try {

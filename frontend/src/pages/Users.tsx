@@ -14,6 +14,11 @@ interface UserData {
   location?: string;
   dateOfBirth?: string;
   createdAt: string;
+  studentProfile?: {
+    id: string;
+    totalPaid: number;
+    balanceDue: number;
+  } | null;
 }
 
 interface DocumentData {
@@ -36,6 +41,22 @@ type EditUserForm = {
   password: string;
 };
 
+type Notice = { type: 'success' | 'error'; text: string } | null;
+
+const getErrorMessage = (err: any, fallback: string) =>
+  err.response?.data?.error || err.response?.data?.details || err.message || fallback;
+
+const RequiredLabel = ({ children }: { children: React.ReactNode }) => (
+  <label className="block text-sm font-medium text-slate-700 mb-1">
+    {children} <span className="text-red-500">*</span>
+  </label>
+);
+
+const getStudentDealAmount = (studentProfile?: UserData['studentProfile']) => {
+  if (!studentProfile) return 0;
+  return Math.max((studentProfile.totalPaid || 0) + (studentProfile.balanceDue || 0), 0);
+};
+
 export default function Users() {
   const { user } = useAuthStore();
   const isAdmin = user?.role === 'ADMIN';
@@ -44,6 +65,7 @@ export default function Users() {
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [notice, setNotice] = useState<Notice>(null);
 
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -67,7 +89,8 @@ export default function Users() {
     role: 'STUDENT',
     phone: '',
     location: '',
-    dateOfBirth: ''
+    dateOfBirth: '',
+    totalAmount: ''
   });
 
   const [documents, setDocuments] = useState<{ file: File; remark: string }[]>([]);
@@ -97,14 +120,14 @@ export default function Users() {
     const selectedFiles = Array.from(e.target.files);
     const validFiles = selectedFiles.filter((file) => {
       if (file.size > 1024 * 1024) {
-        alert(`File ${file.name} is larger than 1MB limit.`);
+        setNotice({ type: 'error', text: `Cannot upload ${file.name} because it is larger than the 1MB limit.` });
         return false;
       }
       return true;
     });
 
     if (documents.length + validFiles.length > 4) {
-      alert('You can only upload up to 4 documents.');
+      setNotice({ type: 'error', text: 'Cannot upload documents because only 4 files are allowed.' });
       return;
     }
 
@@ -129,6 +152,7 @@ export default function Users() {
   const handleAddUser = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
+    setNotice(null);
     try {
       const submitData = new FormData();
       Object.entries(formData).forEach(([key, value]) => submitData.append(key, value));
@@ -137,11 +161,12 @@ export default function Users() {
         submitData.append(`remark_${index}`, doc.remark);
       });
 
-      await api.post('/users', submitData, {
+      const res = await api.post('/users', submitData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
 
       setIsModalOpen(false);
+      setNotice({ type: 'success', text: res.data?.message || `${formData.firstName} ${formData.lastName} was added successfully.` });
       setFormData({
         firstName: '',
         lastName: '',
@@ -150,12 +175,13 @@ export default function Users() {
         role: 'STUDENT',
         phone: '',
         location: '',
-        dateOfBirth: ''
+        dateOfBirth: '',
+        totalAmount: ''
       });
       setDocuments([]);
       fetchUsers();
     } catch (err: any) {
-      alert('Failed to add user: ' + (err.response?.data?.error || err.message));
+      setNotice({ type: 'error', text: getErrorMessage(err, 'Cannot create user right now.') });
     } finally {
       setSaving(false);
     }
@@ -179,6 +205,7 @@ export default function Users() {
   const handleEditUser = async (e: React.FormEvent) => {
     e.preventDefault();
     setEditing(true);
+    setNotice(null);
     try {
       const payload: any = {
         firstName: editForm.firstName,
@@ -193,9 +220,10 @@ export default function Users() {
 
       await api.put(`/users/${editForm.id}`, payload);
       setIsEditModalOpen(false);
+      setNotice({ type: 'success', text: `${editForm.firstName} ${editForm.lastName} was updated successfully.` });
       fetchUsers();
     } catch (err: any) {
-      alert('Failed to update user: ' + (err.response?.data?.error || err.message));
+      setNotice({ type: 'error', text: getErrorMessage(err, 'Cannot update user right now.') });
     } finally {
       setEditing(false);
     }
@@ -203,12 +231,14 @@ export default function Users() {
 
   const toggleStatus = async (id: string, currentStatus: string) => {
     if (!isAdmin) return;
+    setNotice(null);
     try {
       const newStatus = currentStatus === 'ACTIVE' ? 'LOCKED' : 'ACTIVE';
       await api.patch(`/users/${id}/status`, { status: newStatus });
+      setNotice({ type: 'success', text: `User status changed to ${newStatus}.` });
       fetchUsers();
-    } catch {
-      alert('Failed to update status');
+    } catch (err: any) {
+      setNotice({ type: 'error', text: getErrorMessage(err, 'Cannot update user status right now.') });
     }
   };
 
@@ -216,21 +246,25 @@ export default function Users() {
     if (!isAdmin) return;
     if (!confirm('Are you sure you want to delete this user?')) return;
 
+    setNotice(null);
+    const target = users.find((u) => u.id === id);
     try {
-      await api.delete(`/users/${id}`);
+      const res = await api.delete(`/users/${id}`);
+      setNotice({ type: 'success', text: res.data?.message || `${target?.firstName || 'User'} was removed successfully.` });
       fetchUsers();
     } catch (err: any) {
       if (err.response?.status === 403) {
         try {
-          await api.post(`/users/${id}/delete`);
+          const res = await api.post(`/users/${id}/delete`);
+          setNotice({ type: 'success', text: res.data?.message || `${target?.firstName || 'User'} was removed successfully.` });
           fetchUsers();
           return;
         } catch (fallbackErr: any) {
-          alert('Failed to delete user: ' + (fallbackErr.response?.data?.error || fallbackErr.message));
+          setNotice({ type: 'error', text: getErrorMessage(fallbackErr, 'Cannot delete user right now.') });
           return;
         }
       }
-      alert('Failed to delete user: ' + (err.response?.data?.error || err.message));
+      setNotice({ type: 'error', text: getErrorMessage(err, 'Cannot delete user right now.') });
     }
   };
 
@@ -240,8 +274,8 @@ export default function Users() {
     try {
       const res = await api.get(`/users/${userId}/documents`);
       setUserDocs(res.data || []);
-    } catch {
-      alert('Failed to load documents');
+    } catch (err: any) {
+      setNotice({ type: 'error', text: getErrorMessage(err, 'Cannot load documents right now.') });
     } finally {
       setLoadingDocs(false);
     }
@@ -253,7 +287,7 @@ export default function Users() {
         <div>
           <h1 className="text-2xl font-bold text-slate-800">User Management</h1>
           <p className="text-slate-500">
-            {isAdmin ? 'Manage students, trainers, and admins.' : 'View your accessible users.'}
+            {isAdmin ? 'Manage students and trainers.' : 'View your accessible users.'}
           </p>
         </div>
         {isAdmin && (
@@ -265,6 +299,16 @@ export default function Users() {
           </button>
         )}
       </div>
+
+      {notice && (
+        <div className={`rounded-xl border px-4 py-3 text-sm font-medium ${
+          notice.type === 'success'
+            ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+            : 'border-red-200 bg-red-50 text-red-700'
+        }`}>
+          {notice.text}
+        </div>
+      )}
 
       <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
         <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
@@ -298,6 +342,11 @@ export default function Users() {
                   <td className="px-6 py-4">
                     <div className="font-medium text-slate-800">{u.firstName} {u.lastName}</div>
                     <div className="text-xs text-slate-500">{u.email}</div>
+                    {u.role === 'STUDENT' && u.studentProfile && (
+                      <div className="text-xs text-slate-400 mt-1">
+                        Deal: ${getStudentDealAmount(u.studentProfile).toFixed(2)} | Paid: ${u.studentProfile.totalPaid.toFixed(2)} | Remaining: ${Math.max(u.studentProfile.balanceDue, 0).toFixed(2)}
+                      </div>
+                    )}
                     {(u.phone || u.location) && (
                       <div className="text-xs text-slate-400 mt-1">
                         {u.phone && <span>{u.phone} </span>}
@@ -382,26 +431,66 @@ export default function Users() {
             <div className="overflow-y-auto p-6">
               <form id="addUserForm" onSubmit={handleAddUser} className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
-                  <input type="text" placeholder="First Name" required value={formData.firstName} onChange={(e) => setFormData({ ...formData, firstName: e.target.value })} className="w-full border border-slate-200 rounded-lg p-2.5" />
-                  <input type="text" placeholder="Last Name" required value={formData.lastName} onChange={(e) => setFormData({ ...formData, lastName: e.target.value })} className="w-full border border-slate-200 rounded-lg p-2.5" />
+                  <div>
+                    <RequiredLabel>First Name</RequiredLabel>
+                    <input type="text" required value={formData.firstName} onChange={(e) => setFormData({ ...formData, firstName: e.target.value })} className="w-full border border-slate-200 rounded-lg p-2.5" />
+                  </div>
+                  <div>
+                    <RequiredLabel>Last Name</RequiredLabel>
+                    <input type="text" required value={formData.lastName} onChange={(e) => setFormData({ ...formData, lastName: e.target.value })} className="w-full border border-slate-200 rounded-lg p-2.5" />
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
-                  <input type="email" placeholder="Email" required value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} className="w-full border border-slate-200 rounded-lg p-2.5" />
-                  <input type="password" placeholder="Password" required value={formData.password} onChange={(e) => setFormData({ ...formData, password: e.target.value })} className="w-full border border-slate-200 rounded-lg p-2.5" />
+                  <div>
+                    <RequiredLabel>Email</RequiredLabel>
+                    <input type="email" required value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} className="w-full border border-slate-200 rounded-lg p-2.5" />
+                  </div>
+                  <div>
+                    <RequiredLabel>Password</RequiredLabel>
+                    <input type="password" required value={formData.password} onChange={(e) => setFormData({ ...formData, password: e.target.value })} className="w-full border border-slate-200 rounded-lg p-2.5" />
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-3 gap-4">
-                  <input type="tel" placeholder="Mobile Number" required value={formData.phone} onChange={(e) => setFormData({ ...formData, phone: e.target.value })} className="w-full border border-slate-200 rounded-lg p-2.5" />
-                  <input type="text" placeholder="Location" required value={formData.location} onChange={(e) => setFormData({ ...formData, location: e.target.value })} className="w-full border border-slate-200 rounded-lg p-2.5" />
-                  <input type="date" required value={formData.dateOfBirth} onChange={(e) => setFormData({ ...formData, dateOfBirth: e.target.value })} className="w-full border border-slate-200 rounded-lg p-2.5" />
+                  <div>
+                    <RequiredLabel>Mobile Number</RequiredLabel>
+                    <input type="tel" required value={formData.phone} onChange={(e) => setFormData({ ...formData, phone: e.target.value })} className="w-full border border-slate-200 rounded-lg p-2.5" />
+                  </div>
+                  <div>
+                    <RequiredLabel>Location</RequiredLabel>
+                    <input type="text" required value={formData.location} onChange={(e) => setFormData({ ...formData, location: e.target.value })} className="w-full border border-slate-200 rounded-lg p-2.5" />
+                  </div>
+                  <div>
+                    <RequiredLabel>Date of Birth</RequiredLabel>
+                    <input type="date" required value={formData.dateOfBirth} onChange={(e) => setFormData({ ...formData, dateOfBirth: e.target.value })} className="w-full border border-slate-200 rounded-lg p-2.5" />
+                  </div>
                 </div>
 
-                <select value={formData.role} onChange={(e) => setFormData({ ...formData, role: e.target.value })} className="w-full border border-slate-200 rounded-lg p-2.5">
-                  <option value="STUDENT">Student</option>
-                  <option value="TRAINER">Trainer</option>
-                  <option value="ADMIN">Admin</option>
-                </select>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <RequiredLabel>Role</RequiredLabel>
+                    <select value={formData.role} onChange={(e) => setFormData({ ...formData, role: e.target.value })} className="w-full border border-slate-200 rounded-lg p-2.5">
+                      <option value="STUDENT">Student</option>
+                      <option value="TRAINER">Trainer</option>
+                    </select>
+                  </div>
+                  {formData.role === 'STUDENT' && (
+                    <div>
+                      <RequiredLabel>Total Payment Amount</RequiredLabel>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        required
+                        value={formData.totalAmount}
+                        onChange={(e) => setFormData({ ...formData, totalAmount: e.target.value })}
+                        className="w-full border border-slate-200 rounded-lg p-2.5"
+                        placeholder="0.00"
+                      />
+                    </div>
+                  )}
+                </div>
 
                 <div className="mt-6 border-t border-slate-100 pt-4">
                   <div className="flex justify-between items-center mb-2">
@@ -463,10 +552,19 @@ export default function Users() {
             </div>
             <form onSubmit={handleEditUser} className="p-6 space-y-4">
               <div className="grid grid-cols-2 gap-4">
-                <input value={editForm.firstName} onChange={(e) => setEditForm((p) => ({ ...p, firstName: e.target.value }))} placeholder="First Name" className="w-full border border-slate-200 rounded-lg p-2.5" required />
-                <input value={editForm.lastName} onChange={(e) => setEditForm((p) => ({ ...p, lastName: e.target.value }))} placeholder="Last Name" className="w-full border border-slate-200 rounded-lg p-2.5" required />
+                <div>
+                  <RequiredLabel>First Name</RequiredLabel>
+                  <input value={editForm.firstName} onChange={(e) => setEditForm((p) => ({ ...p, firstName: e.target.value }))} className="w-full border border-slate-200 rounded-lg p-2.5" required />
+                </div>
+                <div>
+                  <RequiredLabel>Last Name</RequiredLabel>
+                  <input value={editForm.lastName} onChange={(e) => setEditForm((p) => ({ ...p, lastName: e.target.value }))} className="w-full border border-slate-200 rounded-lg p-2.5" required />
+                </div>
               </div>
-              <input type="email" value={editForm.email} onChange={(e) => setEditForm((p) => ({ ...p, email: e.target.value }))} placeholder="Email" className="w-full border border-slate-200 rounded-lg p-2.5" required />
+              <div>
+                <RequiredLabel>Email</RequiredLabel>
+                <input type="email" value={editForm.email} onChange={(e) => setEditForm((p) => ({ ...p, email: e.target.value }))} className="w-full border border-slate-200 rounded-lg p-2.5" required />
+              </div>
               <div className="grid grid-cols-2 gap-4">
                 <input value={editForm.phone} onChange={(e) => setEditForm((p) => ({ ...p, phone: e.target.value }))} placeholder="Mobile Number" className="w-full border border-slate-200 rounded-lg p-2.5" />
                 <input value={editForm.location} onChange={(e) => setEditForm((p) => ({ ...p, location: e.target.value }))} placeholder="Location" className="w-full border border-slate-200 rounded-lg p-2.5" />

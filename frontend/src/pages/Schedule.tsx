@@ -33,6 +33,17 @@ const defaultForm: ScheduleFormState = {
   notes: ''
 };
 
+type Notice = { type: 'success' | 'error'; text: string } | null;
+
+const getErrorMessage = (err: any, fallback: string) =>
+  err.response?.data?.error || err.response?.data?.details || err.message || fallback;
+
+const RequiredLabel = ({ children }: { children: React.ReactNode }) => (
+  <label className="block text-sm font-medium text-slate-700 mb-1">
+    {children} <span className="text-red-500">*</span>
+  </label>
+);
+
 export default function Schedule() {
   const { user } = useAuthStore();
   const isAdmin = user?.role === 'ADMIN';
@@ -43,6 +54,7 @@ export default function Schedule() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [notice, setNotice] = useState<Notice>(null);
 
   const [filterStatus, setFilterStatus] = useState('ALL');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -111,6 +123,7 @@ export default function Schedule() {
   const handleSaveSchedule = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
+    setNotice(null);
     try {
       const startDateTime = new Date(`${formData.date}T${formData.startTime}`);
       const payload = {
@@ -128,9 +141,10 @@ export default function Schedule() {
       }
 
       closeScheduleModal();
+      setNotice({ type: 'success', text: editingScheduleId ? 'Class schedule was updated successfully.' : 'Class schedule was created successfully.' });
       fetchSchedules();
     } catch (err: any) {
-      alert('Failed to save schedule: ' + (err.response?.data?.error || err.message));
+      setNotice({ type: 'error', text: getErrorMessage(err, 'Cannot save schedule right now.') });
     } finally {
       setSaving(false);
     }
@@ -149,12 +163,14 @@ export default function Schedule() {
   const confirmDelete = async () => {
     if (!selectedScheduleForDelete) return;
     setDeleting(true);
+    setNotice(null);
     try {
       await api.delete(`/schedules/${selectedScheduleForDelete.id}`);
       closeDeleteModal();
+      setNotice({ type: 'success', text: 'Class schedule was removed successfully.' });
       fetchSchedules();
     } catch (err: any) {
-      alert('Failed to delete schedule: ' + (err.response?.data?.error || err.message));
+      setNotice({ type: 'error', text: getErrorMessage(err, 'Cannot delete schedule right now.') });
     } finally {
       setDeleting(false);
     }
@@ -235,8 +251,18 @@ export default function Schedule() {
                     <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold tracking-wider uppercase mt-1 ${statusColors[schedule.status] || 'bg-slate-100 text-slate-600'}`}>
                       {schedule.status}
                     </span>
-                  </div>
-                </div>
+        </div>
+      </div>
+
+      {notice && (
+        <div className={`rounded-xl border px-4 py-3 text-sm font-medium ${
+          notice.type === 'success'
+            ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+            : 'border-red-200 bg-red-50 text-red-700'
+        }`}>
+          {notice.text}
+        </div>
+      )}
                 {isAdmin && (
                   <div className="flex items-center gap-1">
                     <button
@@ -313,7 +339,7 @@ export default function Schedule() {
             </div>
             <form onSubmit={handleSaveSchedule} className="p-6 space-y-4">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Assign Trainer</label>
+                <RequiredLabel>Assign Trainer</RequiredLabel>
                 <select
                   required
                   value={formData.trainerId}
@@ -328,7 +354,7 @@ export default function Schedule() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Assign Student</label>
+                <RequiredLabel>Assign Student</RequiredLabel>
                 <select
                   required
                   value={formData.studentId}
@@ -343,7 +369,7 @@ export default function Schedule() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Date</label>
+                <RequiredLabel>Date</RequiredLabel>
                 <input
                   type="date"
                   required
@@ -355,7 +381,7 @@ export default function Schedule() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Start Time</label>
+                <RequiredLabel>Start Time</RequiredLabel>
                 <input
                   type="time"
                   required
