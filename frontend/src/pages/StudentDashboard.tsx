@@ -10,6 +10,7 @@ export default function StudentDashboard() {
   const navigate = useNavigate();
   const [schedules, setSchedules] = useState<any[]>([]);
   const [payments, setPayments] = useState<any[]>([]);
+  const [profile, setProfile] = useState<any | null>(null);
   const [tests, setTests] = useState<any[]>([]);
   const [attendance, setAttendance] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -17,14 +18,16 @@ export default function StudentDashboard() {
   useEffect(() => {
     const fetchAll = async () => {
       try {
-        const [schRes, payRes, testRes] = await Promise.all([
+        const [schRes, payRes, testRes, profileRes] = await Promise.all([
           api.get('/schedules'),
           api.get('/payments'),
-          api.get('/mock-tests')
+          api.get('/mock-tests'),
+          api.get('/profile')
         ]);
         setSchedules(schRes.data);
         setPayments(payRes.data);
         setTests(testRes.data);
+        setProfile(profileRes.data);
 
         // Flatten all attendances from all schedules
         const allAttendance: any[] = [];
@@ -46,8 +49,10 @@ export default function StudentDashboard() {
   const upcoming = schedules.filter(s => s.status === 'SCHEDULED');
   const completedClasses = schedules.filter(s => s.status === 'COMPLETED').length;
   const totalClasses = schedules.length;
-  const totalPaid = payments.filter(p => p.status === 'PAID').reduce((a, c) => a + c.amount, 0);
-  const totalPending = payments.filter(p => p.status === 'PENDING').reduce((a, c) => a + c.amount, 0);
+  const paidFromPayments = payments.filter(p => p.status === 'PAID').reduce((a, c) => a + c.amount, 0);
+  const totalPaid = profile?.totalPaid ?? paidFromPayments;
+  const balanceDue = profile?.balanceDue ?? payments.reduce((max, payment) => Math.max(max, payment.remainingAmount ?? 0), 0);
+  const dealAmount = Math.max(totalPaid + balanceDue, 0);
 
   // Best test score
   const allResults = tests.flatMap(t => t.results || []);
@@ -62,9 +67,9 @@ export default function StudentDashboard() {
     },
     {
       title: 'Balance Due',
-      value: loading ? '...' : `$${totalPending.toFixed(2)}`,
+      value: loading ? '...' : `$${balanceDue.toFixed(2)}`,
       icon: <CreditCard size={24} />,
-      color: totalPending > 0 ? 'bg-red-500' : 'bg-emerald-500'
+      color: balanceDue > 0 ? 'bg-red-500' : 'bg-emerald-500'
     },
     {
       title: 'Attendance Records',
@@ -110,6 +115,30 @@ export default function StudentDashboard() {
             </div>
           </div>
         ))}
+      </div>
+
+      <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+        <div className="flex items-center justify-between mb-5">
+          <div>
+            <h2 className="text-lg font-bold text-slate-800">Fee Summary</h2>
+            <p className="text-sm text-slate-500">A quick view of your course fee status.</p>
+          </div>
+          <CreditCard size={20} className="text-emerald-500" />
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="rounded-xl border border-slate-100 bg-slate-50 p-4">
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Total Fees</p>
+            <p className="text-2xl font-bold text-slate-800 mt-2">${dealAmount.toFixed(2)}</p>
+          </div>
+          <div className="rounded-xl border border-slate-100 bg-emerald-50 p-4">
+            <p className="text-xs font-semibold text-emerald-700 uppercase tracking-wide">Total Fees Paid</p>
+            <p className="text-2xl font-bold text-emerald-800 mt-2">${totalPaid.toFixed(2)}</p>
+          </div>
+          <div className="rounded-xl border border-slate-100 bg-orange-50 p-4">
+            <p className="text-xs font-semibold text-orange-700 uppercase tracking-wide">Total Fees Due</p>
+            <p className="text-2xl font-bold text-orange-800 mt-2">${balanceDue.toFixed(2)}</p>
+          </div>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -180,8 +209,8 @@ export default function StudentDashboard() {
                 <div className="flex justify-between text-sm font-medium mb-2">
                   <span className="text-slate-700">Payments Cleared</span>
                   <span className="text-blue-500">
-                    {totalPaid + totalPending > 0
-                      ? Math.round((totalPaid / (totalPaid + totalPending)) * 100)
+                    {dealAmount > 0
+                      ? Math.round((totalPaid / dealAmount) * 100)
                       : 0}%
                   </span>
                 </div>
@@ -189,13 +218,13 @@ export default function StudentDashboard() {
                   <div
                     className="bg-blue-500 h-2.5 rounded-full transition-all"
                     style={{
-                      width: totalPaid + totalPending > 0
-                        ? `${Math.round((totalPaid / (totalPaid + totalPending)) * 100)}%`
+                      width: dealAmount > 0
+                        ? `${Math.round((totalPaid / dealAmount) * 100)}%`
                         : '0%'
                     }}
                   />
                 </div>
-                <p className="text-xs text-slate-400 mt-1">${totalPaid.toFixed(2)} paid · ${totalPending.toFixed(2)} due</p>
+                <p className="text-xs text-slate-400 mt-1">${totalPaid.toFixed(2)} paid · ${balanceDue.toFixed(2)} due</p>
               </div>
 
               {/* Recent payments */}

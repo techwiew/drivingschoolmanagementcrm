@@ -55,6 +55,13 @@ export default function Payments() {
     if (user?.role === 'ADMIN') fetchStudents();
   }, [user]);
 
+  const refreshData = async () => {
+    await Promise.all([
+      fetchPayments(),
+      user?.role === 'ADMIN' ? fetchStudents() : Promise.resolve()
+    ]);
+  };
+
   const handleRecordPayment = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
@@ -64,7 +71,7 @@ export default function Payments() {
       setIsModalOpen(false);
       setFormData({ studentId: '', amount: '', method: 'CASH', status: 'PAID', notes: '' });
       setNotice({ type: 'success', text: res.data?.message || 'Payment recorded successfully.' });
-      fetchPayments();
+      await refreshData();
     } catch (err: any) {
       setNotice({ type: 'error', text: getErrorMessage(err, 'Cannot record payment right now.') });
     } finally {
@@ -78,7 +85,7 @@ export default function Payments() {
     try {
       const res = await api.patch(`/payments/${paymentId}/status`, { status: 'PAID' });
       setNotice({ type: 'success', text: res.data?.message || 'Payment marked as collected.' });
-      fetchPayments();
+      await refreshData();
     } catch (err: any) {
       setNotice({ type: 'error', text: getErrorMessage(err, 'Cannot mark payment as collected right now.') });
     } finally {
@@ -90,7 +97,7 @@ export default function Payments() {
     .filter(p => p.status === 'PAID')
     .reduce((acc, curr) => acc + curr.amount, 0);
 
-  const totalPending = payments
+  const pendingTransactions = payments
     .filter(p => p.status === 'PENDING')
     .reduce((acc, curr) => acc + curr.amount, 0);
 
@@ -152,8 +159,8 @@ export default function Payments() {
           </div>
           <div>
             <p className="text-sm text-slate-500 font-medium">Pending Payments</p>
-            <p className="text-2xl font-bold text-slate-800">${totalPending.toFixed(2)}</p>
-            <p className="text-xs text-slate-400 mt-1">${remainingBalance.toFixed(2)} remaining balance</p>
+            <p className="text-2xl font-bold text-slate-800">${remainingBalance.toFixed(2)}</p>
+            <p className="text-xs text-slate-400 mt-1">${pendingTransactions.toFixed(2)} pending transaction amount</p>
           </div>
         </div>
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4">
@@ -283,7 +290,7 @@ export default function Payments() {
               </div>
               {selectedStudent?.studentProfile && (
                 <div className="rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
-                  Deal: ${getStudentDealAmount(selectedStudent).toFixed(2)} | Paid: ${selectedStudent.studentProfile.totalPaid.toFixed(2)} | Remaining: ${Math.max(selectedStudent.studentProfile.balanceDue || 0, 0).toFixed(2)}
+                  Total fees: ${getStudentDealAmount(selectedStudent).toFixed(2)} | Paid: ${selectedStudent.studentProfile.totalPaid.toFixed(2)} | Remaining: ${Math.max(selectedStudent.studentProfile.balanceDue || 0, 0).toFixed(2)}
                 </div>
               )}
               <div>

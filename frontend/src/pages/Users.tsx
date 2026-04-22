@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Download, FileText, Loader2, Lock, Pencil, Plus, Search, Trash2, Unlock, X } from 'lucide-react';
+import { Download, Eye, FileText, Loader2, Lock, Pencil, Plus, Search, Trash2, Unlock, X } from 'lucide-react';
 import { api } from '../lib/axios';
 import { useAuthStore } from '../store/authStore';
 
@@ -29,6 +29,75 @@ interface DocumentData {
   uploadedAt: string;
 }
 
+type UserDetails = {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  role: string;
+  status: string;
+  phone?: string;
+  location?: string;
+  dateOfBirth?: string;
+  createdAt: string;
+  documents?: DocumentData[];
+  studentProfile?: {
+    id: string;
+    licenseStatus: string;
+    totalPaid: number;
+    balanceDue: number;
+  } | null;
+  trainerProfile?: {
+    id: string;
+    availabilityStatus: string;
+  } | null;
+  payments?: Array<{
+    id: string;
+    amount: number;
+    method: string;
+    status: string;
+    notes?: string | null;
+    createdAt: string;
+  }>;
+  schedules?: Array<{
+    id: string;
+    startTime: string;
+    status: string;
+    course?: { title?: string | null } | null;
+    trainer?: { user?: { firstName?: string; lastName?: string } | null } | null;
+    student?: { user?: { firstName?: string; lastName?: string } | null } | null;
+  }>;
+  attendances?: Array<{
+    id: string;
+    status: string;
+    schedule?: {
+      startTime: string;
+      course?: { title?: string | null } | null;
+      trainer?: { user?: { firstName?: string; lastName?: string } | null } | null;
+    } | null;
+  }>;
+  testResults?: Array<{
+    id: string;
+    score: number;
+    attemptedAt: string;
+    test?: { title?: string | null } | null;
+  }>;
+  summary?: {
+    totalFees?: number;
+    totalPaid?: number;
+    balanceDue?: number;
+    joinedOn?: string;
+    age?: number | null;
+    firstJoinedClassAt?: string | null;
+    latestPaymentAt?: string | null;
+    totalClasses?: number;
+    completedClasses?: number;
+    upcomingClasses?: number;
+    assignedStudents?: number;
+    totalDocuments?: number;
+  } | null;
+};
+
 type EditUserForm = {
   id: string;
   firstName: string;
@@ -55,6 +124,12 @@ const RequiredLabel = ({ children }: { children: React.ReactNode }) => (
 const getStudentDealAmount = (studentProfile?: UserData['studentProfile']) => {
   if (!studentProfile) return 0;
   return Math.max((studentProfile.totalPaid || 0) + (studentProfile.balanceDue || 0), 0);
+};
+
+const getAdultMaxDate = () => {
+  const date = new Date();
+  date.setFullYear(date.getFullYear() - 18);
+  return date.toISOString().slice(0, 10);
 };
 
 export default function Users() {
@@ -98,6 +173,9 @@ export default function Users() {
   const [viewingDocsUserId, setViewingDocsUserId] = useState<string | null>(null);
   const [userDocs, setUserDocs] = useState<DocumentData[]>([]);
   const [loadingDocs, setLoadingDocs] = useState(false);
+  const [viewingDetailsUserId, setViewingDetailsUserId] = useState<string | null>(null);
+  const [userDetails, setUserDetails] = useState<UserDetails | null>(null);
+  const [loadingDetails, setLoadingDetails] = useState(false);
 
   const fetchUsers = async () => {
     try {
@@ -281,6 +359,26 @@ export default function Users() {
     }
   };
 
+  const viewUserDetails = async (userId: string) => {
+    setViewingDetailsUserId(userId);
+    setLoadingDetails(true);
+    try {
+      const res = await api.get(`/users/${userId}/details`);
+      setUserDetails(res.data);
+    } catch (err: any) {
+      setNotice({ type: 'error', text: getErrorMessage(err, 'Cannot load user details right now.') });
+      setViewingDetailsUserId(null);
+      setUserDetails(null);
+    } finally {
+      setLoadingDetails(false);
+    }
+  };
+
+  const closeUserDetails = () => {
+    setViewingDetailsUserId(null);
+    setUserDetails(null);
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -344,7 +442,7 @@ export default function Users() {
                     <div className="text-xs text-slate-500">{u.email}</div>
                     {u.role === 'STUDENT' && u.studentProfile && (
                       <div className="text-xs text-slate-400 mt-1">
-                        Deal: ${getStudentDealAmount(u.studentProfile).toFixed(2)} | Paid: ${u.studentProfile.totalPaid.toFixed(2)} | Remaining: ${Math.max(u.studentProfile.balanceDue, 0).toFixed(2)}
+                        Total fees: ${getStudentDealAmount(u.studentProfile).toFixed(2)} | Paid: ${u.studentProfile.totalPaid.toFixed(2)} | Remaining: ${Math.max(u.studentProfile.balanceDue, 0).toFixed(2)}
                       </div>
                     )}
                     {(u.phone || u.location) && (
@@ -374,6 +472,13 @@ export default function Users() {
                     </span>
                   </td>
                   <td className="px-6 py-4 text-right space-x-2">
+                    <button
+                      onClick={() => viewUserDetails(u.id)}
+                      title="View Details"
+                      className="p-2 text-slate-400 hover:text-emerald-600 transition-colors"
+                    >
+                      <Eye size={18} />
+                    </button>
                     <button
                       onClick={() => viewUserDocuments(u.id)}
                       title="View Documents"
@@ -463,7 +568,7 @@ export default function Users() {
                   </div>
                   <div>
                     <RequiredLabel>Date of Birth</RequiredLabel>
-                    <input type="date" required value={formData.dateOfBirth} onChange={(e) => setFormData({ ...formData, dateOfBirth: e.target.value })} className="w-full border border-slate-200 rounded-lg p-2.5" />
+                    <input type="date" required max={getAdultMaxDate()} value={formData.dateOfBirth} onChange={(e) => setFormData({ ...formData, dateOfBirth: e.target.value })} className="w-full border border-slate-200 rounded-lg p-2.5" />
                   </div>
                 </div>
 
@@ -477,7 +582,7 @@ export default function Users() {
                   </div>
                   {formData.role === 'STUDENT' && (
                     <div>
-                      <RequiredLabel>Total Payment Amount</RequiredLabel>
+                      <RequiredLabel>Total Fees</RequiredLabel>
                       <input
                         type="number"
                         min="0"
@@ -570,7 +675,7 @@ export default function Users() {
                 <input value={editForm.location} onChange={(e) => setEditForm((p) => ({ ...p, location: e.target.value }))} placeholder="Location" className="w-full border border-slate-200 rounded-lg p-2.5" />
               </div>
               <div className="grid grid-cols-2 gap-4">
-                <input type="date" value={editForm.dateOfBirth} onChange={(e) => setEditForm((p) => ({ ...p, dateOfBirth: e.target.value }))} className="w-full border border-slate-200 rounded-lg p-2.5" />
+                <input type="date" max={getAdultMaxDate()} value={editForm.dateOfBirth} onChange={(e) => setEditForm((p) => ({ ...p, dateOfBirth: e.target.value }))} className="w-full border border-slate-200 rounded-lg p-2.5" />
                 <select value={editForm.status} onChange={(e) => setEditForm((p) => ({ ...p, status: e.target.value as 'ACTIVE' | 'LOCKED' }))} className="w-full border border-slate-200 rounded-lg p-2.5">
                   <option value="ACTIVE">ACTIVE</option>
                   <option value="LOCKED">LOCKED</option>
@@ -587,6 +692,271 @@ export default function Users() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {viewingDetailsUserId && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-5xl overflow-hidden max-h-[92vh] flex flex-col">
+            <div className="flex justify-between items-center p-6 border-b border-slate-100">
+              <div>
+                <h2 className="text-xl font-bold text-slate-800">User Details</h2>
+                {userDetails && (
+                  <p className="text-sm text-slate-500 mt-1">
+                    {userDetails.firstName} {userDetails.lastName} · {userDetails.role}
+                  </p>
+                )}
+              </div>
+              <button onClick={closeUserDetails} className="text-slate-400 hover:text-slate-600">
+                <X size={24} />
+              </button>
+            </div>
+
+            <div className="overflow-y-auto p-6">
+              {loadingDetails ? (
+                <div className="flex justify-center p-12 text-emerald-500">
+                  <Loader2 className="animate-spin" size={32} />
+                </div>
+              ) : userDetails ? (
+                <div className="space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div className="rounded-xl border border-slate-100 bg-slate-50 p-4">
+                      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Joined</p>
+                      <p className="text-lg font-bold text-slate-800 mt-2">{new Date(userDetails.summary?.joinedOn || userDetails.createdAt).toLocaleDateString()}</p>
+                    </div>
+                    <div className="rounded-xl border border-slate-100 bg-slate-50 p-4">
+                      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                        {userDetails.role === 'STUDENT' ? 'Total Fees' : 'Classes'}
+                      </p>
+                      <p className="text-lg font-bold text-slate-800 mt-2">
+                        {userDetails.role === 'STUDENT'
+                          ? `$${(userDetails.summary?.totalFees || 0).toFixed(2)}`
+                          : userDetails.summary?.totalClasses || 0}
+                      </p>
+                    </div>
+                    <div className="rounded-xl border border-slate-100 bg-slate-50 p-4">
+                      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                        {userDetails.role === 'STUDENT' ? 'Total Paid' : 'Upcoming Classes'}
+                      </p>
+                      <p className="text-lg font-bold text-slate-800 mt-2">
+                        {userDetails.role === 'STUDENT'
+                          ? `$${(userDetails.summary?.totalPaid || 0).toFixed(2)}`
+                          : userDetails.summary?.upcomingClasses || 0}
+                      </p>
+                    </div>
+                    <div className="rounded-xl border border-slate-100 bg-slate-50 p-4">
+                      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                        {userDetails.role === 'STUDENT' ? 'Total Due' : userDetails.role === 'TRAINER' ? 'Assigned Students' : 'Documents'}
+                      </p>
+                      <p className="text-lg font-bold text-slate-800 mt-2">
+                        {userDetails.role === 'STUDENT'
+                          ? `$${(userDetails.summary?.balanceDue || 0).toFixed(2)}`
+                          : userDetails.role === 'TRAINER'
+                          ? userDetails.summary?.assignedStudents || 0
+                          : userDetails.summary?.totalDocuments || 0}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div className="rounded-xl border border-slate-100 p-5">
+                      <h3 className="text-base font-bold text-slate-800 mb-4">Profile</h3>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+                        <div>
+                          <p className="text-slate-400">Email</p>
+                          <p className="text-slate-800 font-medium">{userDetails.email}</p>
+                        </div>
+                        <div>
+                          <p className="text-slate-400">Mobile</p>
+                          <p className="text-slate-800 font-medium">{userDetails.phone || '-'}</p>
+                        </div>
+                        <div>
+                          <p className="text-slate-400">Location</p>
+                          <p className="text-slate-800 font-medium">{userDetails.location || '-'}</p>
+                        </div>
+                        <div>
+                          <p className="text-slate-400">Date of Birth</p>
+                          <p className="text-slate-800 font-medium">
+                            {userDetails.dateOfBirth ? new Date(userDetails.dateOfBirth).toLocaleDateString() : '-'}
+                          </p>
+                        </div>
+                        {userDetails.role === 'STUDENT' && (
+                          <div>
+                            <p className="text-slate-400">Age</p>
+                            <p className="text-slate-800 font-medium">{userDetails.summary?.age ?? '-'}</p>
+                          </div>
+                        )}
+                        <div>
+                          <p className="text-slate-400">Status</p>
+                          <p className="text-slate-800 font-medium">{userDetails.status}</p>
+                        </div>
+                        {userDetails.studentProfile && (
+                          <div>
+                            <p className="text-slate-400">License Status</p>
+                            <p className="text-slate-800 font-medium">{userDetails.studentProfile.licenseStatus}</p>
+                          </div>
+                        )}
+                        {userDetails.role === 'STUDENT' && (
+                          <>
+                            <div>
+                              <p className="text-slate-400">First Class Joined</p>
+                              <p className="text-slate-800 font-medium">
+                                {userDetails.summary?.firstJoinedClassAt ? new Date(userDetails.summary.firstJoinedClassAt).toLocaleString() : '-'}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-slate-400">Latest Payment</p>
+                              <p className="text-slate-800 font-medium">
+                                {userDetails.summary?.latestPaymentAt ? new Date(userDetails.summary.latestPaymentAt).toLocaleString() : '-'}
+                              </p>
+                            </div>
+                          </>
+                        )}
+                        {userDetails.trainerProfile && (
+                          <div>
+                            <p className="text-slate-400">Availability</p>
+                            <p className="text-slate-800 font-medium">{userDetails.trainerProfile.availabilityStatus}</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="rounded-xl border border-slate-100 p-5">
+                      <h3 className="text-base font-bold text-slate-800 mb-4">Documents</h3>
+                      <div className="space-y-3">
+                        {(userDetails.documents || []).slice(0, 5).map((doc) => (
+                          <div key={doc.id} className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium text-slate-800 truncate">{doc.fileName}</p>
+                              <p className="text-xs text-slate-400">{doc.remark || 'No remark'}</p>
+                            </div>
+                            <a
+                              href={import.meta.env.PROD ? `/_/backend${doc.fileUrl}` : `http://localhost:5000${doc.fileUrl}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-emerald-600 hover:text-emerald-700"
+                            >
+                              <Download size={16} />
+                            </a>
+                          </div>
+                        ))}
+                        {(userDetails.documents || []).length === 0 && (
+                          <p className="text-sm text-slate-400">No documents uploaded.</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {userDetails.role === 'STUDENT' && (
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                      <div className="rounded-xl border border-slate-100 p-5">
+                        <h3 className="text-base font-bold text-slate-800 mb-4">Payments</h3>
+                        <div className="space-y-3 max-h-72 overflow-y-auto">
+                          {(userDetails.payments || []).map((payment) => (
+                            <div key={payment.id} className="rounded-lg bg-slate-50 px-4 py-3">
+                              <div className="flex items-center justify-between gap-3">
+                                <p className="text-sm font-semibold text-slate-800">${payment.amount.toFixed(2)}</p>
+                                <span className="text-xs font-medium text-slate-500">{payment.status}</span>
+                              </div>
+                              <p className="text-xs text-slate-500 mt-1">
+                                {payment.method} · {new Date(payment.createdAt).toLocaleDateString()}
+                              </p>
+                              <p className="text-xs text-slate-400 mt-1">{payment.notes || 'No notes'}</p>
+                            </div>
+                          ))}
+                          {(userDetails.payments || []).length === 0 && (
+                            <p className="text-sm text-slate-400">No payments recorded.</p>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="rounded-xl border border-slate-100 p-5">
+                        <h3 className="text-base font-bold text-slate-800 mb-4">Classes Joined</h3>
+                        <div className="space-y-3 max-h-72 overflow-y-auto">
+                          {(userDetails.schedules || []).map((schedule) => (
+                            <div key={schedule.id} className="rounded-lg bg-slate-50 px-4 py-3">
+                              <p className="text-sm font-semibold text-slate-800">{schedule.course?.title || 'Untitled Course'}</p>
+                              <p className="text-xs text-slate-500 mt-1">{new Date(schedule.startTime).toLocaleString()}</p>
+                              <p className="text-xs text-slate-500 mt-1">
+                                Trainer: {schedule.trainer?.user?.firstName || '-'} {schedule.trainer?.user?.lastName || ''}
+                              </p>
+                              <p className="text-xs text-slate-400 mt-1">Status: {schedule.status}</p>
+                            </div>
+                          ))}
+                          {(userDetails.schedules || []).length === 0 && (
+                            <p className="text-sm text-slate-400">No classes assigned yet.</p>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="rounded-xl border border-slate-100 p-5">
+                        <h3 className="text-base font-bold text-slate-800 mb-4">Attendance</h3>
+                        <div className="space-y-3 max-h-72 overflow-y-auto">
+                          {(userDetails.attendances || []).map((attendance) => (
+                            <div key={attendance.id} className="rounded-lg bg-slate-50 px-4 py-3">
+                              <p className="text-sm font-semibold text-slate-800">{attendance.schedule?.course?.title || 'Class Session'}</p>
+                              <p className="text-xs text-slate-500 mt-1">{attendance.schedule?.startTime ? new Date(attendance.schedule.startTime).toLocaleString() : '-'}</p>
+                              <p className="text-xs text-slate-400 mt-1">Marked {attendance.status}</p>
+                            </div>
+                          ))}
+                          {(userDetails.attendances || []).length === 0 && (
+                            <p className="text-sm text-slate-400">No attendance records yet.</p>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="rounded-xl border border-slate-100 p-5">
+                        <h3 className="text-base font-bold text-slate-800 mb-4">Mock Test Results</h3>
+                        <div className="space-y-3 max-h-72 overflow-y-auto">
+                          {(userDetails.testResults || []).map((result) => (
+                            <div key={result.id} className="rounded-lg bg-slate-50 px-4 py-3">
+                              <p className="text-sm font-semibold text-slate-800">{result.test?.title || 'Mock Test'}</p>
+                              <p className="text-xs text-slate-500 mt-1">Score: {result.score}%</p>
+                              <p className="text-xs text-slate-400 mt-1">{new Date(result.attemptedAt).toLocaleString()}</p>
+                            </div>
+                          ))}
+                          {(userDetails.testResults || []).length === 0 && (
+                            <p className="text-sm text-slate-400">No mock test attempts yet.</p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {userDetails.role === 'TRAINER' && (
+                    <div className="rounded-xl border border-slate-100 p-5">
+                      <h3 className="text-base font-bold text-slate-800 mb-4">Assigned Classes</h3>
+                      <div className="space-y-3 max-h-80 overflow-y-auto">
+                        {(userDetails.schedules || []).map((schedule) => (
+                          <div key={schedule.id} className="rounded-lg bg-slate-50 px-4 py-3">
+                            <div className="flex items-center justify-between gap-3">
+                              <p className="text-sm font-semibold text-slate-800">{schedule.course?.title || 'Untitled Course'}</p>
+                              <span className="text-xs text-slate-500">{schedule.status}</span>
+                            </div>
+                            <p className="text-xs text-slate-500 mt-1">{new Date(schedule.startTime).toLocaleString()}</p>
+                            <p className="text-xs text-slate-400 mt-1">
+                              Student: {schedule.student?.user?.firstName || '-'} {schedule.student?.user?.lastName || ''}
+                            </p>
+                          </div>
+                        ))}
+                        {(userDetails.schedules || []).length === 0 && (
+                          <p className="text-sm text-slate-400">No classes assigned yet.</p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="text-center p-8 text-slate-500">No details found for this user.</div>
+              )}
+            </div>
+
+            <div className="p-4 border-t border-slate-100 bg-slate-50">
+              <button onClick={closeUserDetails} className="w-full px-4 py-2 border border-slate-200 text-slate-600 rounded-lg hover:bg-white transition-colors bg-white font-medium">
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}

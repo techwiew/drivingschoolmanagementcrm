@@ -42,7 +42,7 @@ export default function AdminDashboard() {
   const trainers  = allUsers.filter(u => u.role === 'TRAINER');
   const upcoming  = schedules.filter(s => s.status === 'SCHEDULED');
   const revenue   = payments.filter(p => p.status === 'PAID').reduce((a, c) => a + c.amount, 0);
-  const pending   = payments.filter(p => p.status === 'PENDING').reduce((a, c) => a + c.amount, 0);
+  const pendingTransactions = payments.filter(p => p.status === 'PENDING').reduce((a, c) => a + c.amount, 0);
   const now = new Date();
   const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
   const currentMonthStudents = students.filter(s => isSameMonth(s.createdAt, now)).length;
@@ -60,7 +60,7 @@ export default function AdminDashboard() {
     { title: 'Total Students', value: loading ? '...' : students.length, sub: `${allUsers.length} total users`, icon: <Users size={22} />, color: 'bg-blue-500' },
     { title: 'Active Trainers', value: loading ? '...' : trainers.length, sub: 'registered trainers', icon: <Users size={22} />, color: 'bg-emerald-500' },
     { title: 'Upcoming Classes', value: loading ? '...' : upcoming.length, sub: `${schedules.length} total scheduled`, icon: <Calendar size={22} />, color: 'bg-purple-500' },
-    { title: 'Revenue Collected', value: loading ? '...' : `$${revenue.toFixed(0)}`, sub: `$${pending.toFixed(0)} pending`, icon: <TrendingUp size={22} />, color: 'bg-orange-500' },
+    { title: 'Revenue Collected', value: loading ? '...' : `$${revenue.toFixed(0)}`, sub: `$${outstandingBalance.toFixed(0)} remaining due`, icon: <TrendingUp size={22} />, color: 'bg-orange-500' },
   ];
 
   return (
@@ -108,7 +108,7 @@ export default function AdminDashboard() {
           {[
             { label: 'Students This Month', value: currentMonthStudents, detail: `${lastMonthStudents} last month` },
             { label: 'Collected This Month', value: `$${collectedThisMonth.toFixed(0)}`, detail: `$${revenue.toFixed(0)} all time` },
-            { label: 'Outstanding Balance', value: `$${outstandingBalance.toFixed(0)}`, detail: `$${pending.toFixed(0)} pending records` },
+            { label: 'Outstanding Balance', value: `$${outstandingBalance.toFixed(0)}`, detail: `$${pendingTransactions.toFixed(0)} pending transaction amount` },
             { label: 'Average Payment', value: `$${averagePayment.toFixed(0)}`, detail: `${paidPayments.length} collected payments` },
             { label: 'Classes This Month', value: monthClasses.length, detail: `${completedClasses} completed total` }
           ].map(item => (

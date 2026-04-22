@@ -109,6 +109,41 @@ const getSchoolUserOrFail = (req: Request, res: Response) => {
   return user as Required<Pick<AuthTokenPayload, 'userId' | 'schoolId'>> & AuthTokenPayload;
 };
 
+const minimumAdultDate = () => {
+  const date = new Date();
+  date.setFullYear(date.getFullYear() - 18);
+  date.setHours(23, 59, 59, 999);
+  return date;
+};
+
+const parseAdultDateOfBirth = (value: unknown) => {
+  if (!value) {
+    return { ok: false as const, error: 'Date of birth is required.' };
+  }
+
+  const parsed = new Date(String(value));
+  if (Number.isNaN(parsed.getTime())) {
+    return { ok: false as const, error: 'Date of birth is invalid.' };
+  }
+
+  if (parsed > minimumAdultDate()) {
+    return { ok: false as const, error: 'User must be at least 18 years old.' };
+  }
+
+  return { ok: true as const, value: parsed };
+};
+
+const calculateAge = (dateOfBirth: Date | null | undefined) => {
+  if (!dateOfBirth) return null;
+  const today = new Date();
+  let age = today.getFullYear() - dateOfBirth.getFullYear();
+  const hasBirthdayPassed =
+    today.getMonth() > dateOfBirth.getMonth() ||
+    (today.getMonth() === dateOfBirth.getMonth() && today.getDate() >= dateOfBirth.getDate());
+  if (!hasBirthdayPassed) age -= 1;
+  return age;
+};
+
 // -----------------------------------------
 // PUBLIC ROUTES
 // -----------------------------------------
@@ -585,6 +620,11 @@ app.post('/api/users', requireRoles('ADMIN'), upload.array('documents', 4), asyn
       return res.status(400).json({ error: 'Cannot create user because the selected role is invalid.' });
     }
 
+    const parsedDob = parseAdultDateOfBirth(dateOfBirth);
+    if (!parsedDob.ok) {
+      return res.status(400).json({ error: parsedDob.error });
+    }
+
     const parsedTotalAmount = totalAmount === '' || totalAmount === undefined ? 0 : Number(totalAmount);
     if (role === 'STUDENT' && (!Number.isFinite(parsedTotalAmount) || parsedTotalAmount < 0)) {
       return res.status(400).json({ error: 'Cannot create student because the total payment amount is invalid.' });
@@ -608,7 +648,7 @@ app.post('/api/users', requireRoles('ADMIN'), upload.array('documents', 4), asyn
           role,
           phone,
           location,
-          dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null
+          dateOfBirth: parsedDob.value
         }
       });
 
@@ -678,7 +718,13 @@ app.put('/api/users/:id', requireRoles('ADMIN'), async (req, res) => {
     if (typeof phone === 'string') data.phone = phone;
     if (typeof location === 'string') data.location = location;
     if (typeof status === 'string' && ['ACTIVE', 'LOCKED'].includes(status)) data.status = status;
-    if (dateOfBirth) data.dateOfBirth = new Date(dateOfBirth);
+    if (dateOfBirth) {
+      const parsedDob = parseAdultDateOfBirth(dateOfBirth);
+      if (!parsedDob.ok) {
+        return res.status(400).json({ error: parsedDob.error });
+      }
+      data.dateOfBirth = parsedDob.value;
+    }
     if (password) data.passwordHash = await bcrypt.hash(password, 10);
 
     const updated = await prisma.user.update({
@@ -701,6 +747,163 @@ app.put('/api/users/:id', requireRoles('ADMIN'), async (req, res) => {
     res.json({ message: 'User updated', user: updated });
   } catch (error: any) {
     res.status(500).json({ error: 'Failed to update user', details: error.message });
+  }
+});
+
+app.get('/api/users/:id/details', requireRoles('ADMIN'), async (req, res) => {
+  try {
+    const authUser = getSchoolUserOrFail(req, res);
+    if (!authUser) return;
+    const targetUserId = String(req.params.id);
+
+    const target = await prisma.user.findFirst({
+      where: { id: targetUserId, schoolId: authUser.schoolId },
+      select: {
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        role: true,
+        status: true,
+        phone: true,
+        location: true,
+        dateOfBirth: true,
+        createdAt: true
+      }
+    });
+
+    if (!target) return res.status(404).json({ error: 'User not found' });
+
+    const documents = await prisma.document.findMany({
+      where: { userId: target.id },
+      orderBy: { uploadedAt: 'desc' }
+    });
+
+    if (target.role === Role.STUDENT) {
+      const studentProfile = await prisma.studentProfile.findUnique({
+        where: { userId: target.id }
+      });
+
+      if (!studentProfile) {
+        return res.json({ ...target, documents, summary: null, studentProfile: null, payments: [], schedules: [], attendances: [], testResults: [] });
+      }
+
+      const [payments, schedules, attendances, testResults] = await Promise.all([
+        prisma.payment.findMany({
+          where: { schoolId: authUser.schoolId, studentId: studentProfile.id },
+          orderBy: { createdAt: 'desc' }
+        }),
+        prisma.classSchedule.findMany({
+          where: { schoolId: authUser.schoolId, studentId: studentProfile.id },
+          include: {
+            course: true,
+            trainer: { include: { user: true } }
+          },
+          orderBy: { startTime: 'desc' }
+        }),
+        prisma.attendance.findMany({
+          where: {
+            studentId: studentProfile.id,
+            schedule: { schoolId: authUser.schoolId }
+          },
+          include: {
+            schedule: {
+              include: {
+                course: true,
+                trainer: { include: { user: true } }
+              }
+            }
+          },
+          orderBy: { schedule: { startTime: 'desc' } }
+        }),
+        prisma.testResult.findMany({
+          where: { studentId: studentProfile.id },
+          include: { test: true },
+          orderBy: { attemptedAt: 'desc' }
+        })
+      ]);
+
+      const totalPaidFromPayments = payments
+        .filter((payment) => payment.status === 'PAID')
+        .reduce((sum, payment) => sum + payment.amount, 0);
+
+      const totalFees = Math.max(studentProfile.totalPaid + studentProfile.balanceDue, totalPaidFromPayments);
+      const firstJoinedClassAt = schedules.length > 0
+        ? schedules.reduce((earliest, schedule) =>
+            new Date(schedule.startTime) < new Date(earliest.startTime) ? schedule : earliest
+          ).startTime
+        : null;
+      const latestPaymentAt = payments.length > 0 ? payments[0].createdAt : null;
+
+      return res.json({
+        ...target,
+        documents,
+        studentProfile,
+        payments,
+        schedules,
+        attendances,
+        testResults,
+        summary: {
+          totalFees,
+          totalPaid: studentProfile.totalPaid ?? totalPaidFromPayments,
+          balanceDue: studentProfile.balanceDue ?? 0,
+          joinedOn: target.createdAt,
+          age: calculateAge(target.dateOfBirth),
+          firstJoinedClassAt,
+          latestPaymentAt,
+          totalClasses: schedules.length,
+          completedClasses: schedules.filter((schedule) => schedule.status === 'COMPLETED').length,
+          upcomingClasses: schedules.filter((schedule) => schedule.status === 'SCHEDULED').length,
+          totalDocuments: documents.length
+        }
+      });
+    }
+
+    if (target.role === Role.TRAINER) {
+      const trainerProfile = await prisma.trainerProfile.findUnique({
+        where: { userId: target.id }
+      });
+
+      if (!trainerProfile) {
+        return res.json({ ...target, documents, summary: null, trainerProfile: null, schedules: [] });
+      }
+
+      const schedules = await prisma.classSchedule.findMany({
+        where: { schoolId: authUser.schoolId, trainerId: trainerProfile.id },
+        include: {
+          course: true,
+          student: { include: { user: true } },
+          attendances: { include: { student: { include: { user: true } } } }
+        },
+        orderBy: { startTime: 'desc' }
+      });
+
+      return res.json({
+        ...target,
+        documents,
+        trainerProfile,
+        schedules,
+        summary: {
+          totalClasses: schedules.length,
+          completedClasses: schedules.filter((schedule) => schedule.status === 'COMPLETED').length,
+          upcomingClasses: schedules.filter((schedule) => schedule.status === 'SCHEDULED').length,
+          assignedStudents: new Set(
+            schedules.map((schedule) => schedule.student?.userId).filter((studentId): studentId is string => Boolean(studentId))
+          ).size,
+          totalDocuments: documents.length
+        }
+      });
+    }
+
+    return res.json({
+      ...target,
+      documents,
+      summary: {
+        totalDocuments: documents.length
+      }
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: 'Failed to fetch user details', details: error.message });
   }
 });
 
