@@ -1,5 +1,5 @@
 import { 
-  Users, Calendar, CreditCard, FileText, ClipboardCheck, 
+  Users, FileText, ClipboardCheck, 
   BarChart3, Smartphone, Bell, LayoutDashboard 
 } from 'lucide-react';
 

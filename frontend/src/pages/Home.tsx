@@ -1,4 +1,4 @@
-import { ArrowRight, Shield, Calendar, Users, FileText, CreditCard, Bell } from 'lucide-react';
+import { ArrowRight, Shield, Users, FileText, Bell } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 export default function Home() {
