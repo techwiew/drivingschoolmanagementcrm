@@ -6,7 +6,7 @@ export default function Layout() {
   const { token } = useAuthStore();
 
   if (!token) {
-    return <Navigate to="/" replace />;
+    return <Navigate to="/login" replace />;
   }
 
   return (
