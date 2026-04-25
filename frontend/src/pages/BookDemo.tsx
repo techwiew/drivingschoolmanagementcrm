@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Mail, Phone, MapPin, Star, ArrowRight, Building2, User, Calendar } from 'lucide-react';
+import { Mail, Phone, MapPin, Star, ArrowRight, Building2, User } from 'lucide-react';
 
 export default function BookDemo() {
   const [formData, setFormData] = useState({

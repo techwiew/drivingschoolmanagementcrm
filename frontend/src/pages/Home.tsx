@@ -1,4 +1,4 @@
-import { ArrowRight, CheckCircle2, Shield, Calendar, Users, FileText, CreditCard } from 'lucide-react';
+import { ArrowRight, Shield, Calendar, Users, FileText, CreditCard } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 export default function Home() {
