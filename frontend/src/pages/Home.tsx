@@ -49,7 +49,7 @@ export default function Home() {
                     />
                   ))}
                 </div>
-                <span>Joined by 500+ driving schools worldwide</span>
+                <span>Joined by driving schools worldwide</span>
               </div>
             </div>
             <div className="relative perspective-1000">
