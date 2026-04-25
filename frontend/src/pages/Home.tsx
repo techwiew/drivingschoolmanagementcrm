@@ -1,4 +1,4 @@
-import { ArrowRight, Shield, Calendar, Users, FileText, CreditCard } from 'lucide-react';
+import { ArrowRight, Shield, Calendar, Users, FileText, CreditCard, Bell } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 export default function Home() {
@@ -22,7 +22,7 @@ export default function Home() {
               </h1>
               <p className="text-xl text-slate-600 mb-8 leading-relaxed">
                 Everything you need to run your driving school in one place. From student enrollment 
-                to automated scheduling and automated payments.
+                to resource management and progress tracking.
               </p>
               <div className="flex flex-col sm:flex-row gap-4">
                 <Link
@@ -52,17 +52,17 @@ export default function Home() {
                 <span>Joined by 500+ driving schools worldwide</span>
               </div>
             </div>
-            <div className="relative">
-              <div className="bg-white p-4 rounded-[2.5rem] shadow-2xl border border-slate-100 relative z-10">
+            <div className="relative perspective-1000">
+              <div className="bg-white p-4 rounded-[2.5rem] shadow-2xl border border-slate-100 relative z-10 transition-transform duration-700 hover:rotate-y-6 hover:-rotate-x-3 preserve-3d">
                 <img
-                  src="https://images.unsplash.com/photo-1541899481282-d53bffe3c35d?q=80&w=2070&auto=format&fit=crop"
+                  src="https://images.unsplash.com/photo-1460925895917-afdab827c52f?q=80&w=2026&auto=format&fit=crop"
                   alt="Dashboard Preview"
                   className="rounded-[1.8rem] shadow-inner"
                 />
               </div>
               {/* Decorative elements */}
-              <div className="absolute -top-6 -right-6 w-32 h-32 bg-emerald-200 rounded-full blur-3xl opacity-50" />
-              <div className="absolute -bottom-10 -left-10 w-48 h-48 bg-blue-200 rounded-full blur-3xl opacity-50" />
+              <div className="absolute -top-6 -right-6 w-32 h-32 bg-blue-200 rounded-full blur-3xl opacity-50 animate-pulse" />
+              <div className="absolute -bottom-10 -left-10 w-48 h-48 bg-emerald-200 rounded-full blur-3xl opacity-50 animate-pulse" />
             </div>
           </div>
         </div>
@@ -109,9 +109,9 @@ export default function Home() {
                 bg: 'bg-emerald-50'
               },
               {
-                title: 'Automated Scheduling',
-                desc: 'Smart calendar management for trainers and students without overlaps.',
-                icon: <Calendar className="text-blue-500" size={32} />,
+                title: 'Notifications',
+                desc: 'Notifications for upcoming lessons, payments, and mock tests.',
+                icon: <Bell className="text-blue-500" size={32} />,
                 bg: 'bg-blue-50'
               },
               {
@@ -119,12 +119,6 @@ export default function Home() {
                 desc: 'Manage vehicles, trainers, and classrooms efficiently from one dashboard.',
                 icon: <Shield className="text-purple-500" size={32} />,
                 bg: 'bg-purple-50'
-              },
-              {
-                title: 'Payment Integration',
-                desc: 'Automated invoicing and secure online payments for all your services.',
-                icon: <CreditCard className="text-orange-500" size={32} />,
-                bg: 'bg-orange-50'
               },
               {
                 title: 'Mock Tests',
@@ -139,7 +133,7 @@ export default function Home() {
                 bg: 'bg-pink-50'
               }
             ].map((feature, i) => (
-              <div key={i} className="p-8 rounded-3xl border border-slate-100 hover:border-emerald-200 hover:shadow-xl hover:shadow-emerald-500/5 transition-all group">
+              <div key={i} className="hover-3d p-8 rounded-3xl border border-slate-100 bg-white hover:border-blue-200 transition-all group">
                 <div className={`${feature.bg} w-16 h-16 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform`}>
                   {feature.icon}
                 </div>

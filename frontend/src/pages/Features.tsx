@@ -29,9 +29,9 @@ export default function Features() {
       title: "Learning & Scheduling",
       features: [
         {
-          name: "Smart Calendar",
-          desc: "Drag-and-drop scheduling that prevents double bookings and manages instructor workloads.",
-          icon: <Calendar size={24} />
+          name: "Notifications",
+          desc: "Notifications for upcoming lessons, payments, and mock tests.",
+          icon: <Bell size={24} />
         },
         {
           name: "Theory Mock Tests",
@@ -46,18 +46,8 @@ export default function Features() {
       ]
     },
     {
-      title: "Payments & Notifications",
+      title: "Experience",
       features: [
-        {
-          name: "Online Payments",
-          desc: "Accept credit cards, bank transfers, and local payment methods securely.",
-          icon: <CreditCard size={24} />
-        },
-        {
-          name: "Automated Reminders",
-          desc: "SMS and email notifications for upcoming lessons, payments, and mock tests.",
-          icon: <Bell size={24} />
-        },
         {
           name: "Mobile Friendly",
           desc: "Access the entire platform from any device, anytime, anywhere.",
@@ -115,8 +105,8 @@ export default function Features() {
             <div className="lg:w-1/2">
               <h2 className="text-3xl lg:text-4xl font-bold text-slate-900 mb-6">Seamless Integration</h2>
               <p className="text-lg text-slate-600 mb-8 leading-relaxed">
-                All our features work together perfectly. When a student pays, their status 
-                is updated everywhere. When a trainer completes a lesson, attendance and 
+                All our features work together perfectly. When a student progresses through a syllabus, 
+                their status is updated everywhere. When a trainer completes a lesson, attendance and 
                 performance data are synced instantly.
               </p>
               <div className="grid grid-cols-2 gap-6">

@@ -18,10 +18,8 @@ export default function PublicNavbar() {
   }, []);
 
   const navLinks = [
-    { name: 'Products', path: '/features' },
+    { name: 'Services', path: '/features' },
     { name: 'Solutions', path: '/about' },
-    { name: 'Pricing', path: '/features' }, // Pointing to features for now as placeholders
-    { name: 'Resources', path: '/features' },
     { name: 'Contact', path: '/book-demo' },
   ];
 

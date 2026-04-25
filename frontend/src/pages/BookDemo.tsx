@@ -41,7 +41,7 @@ export default function BookDemo() {
           {/* Left Side: Info & Testimonial */}
           <div className="lg:col-span-4 space-y-8">
             {/* Contact Info Card */}
-            <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
+            <div className="hover-3d bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
               <div className="flex items-center gap-4 mb-8">
                 <div className="bg-cyan-100 p-3 rounded-xl text-cyan-600">
                   <Building2 size={24} />
@@ -69,11 +69,11 @@ export default function BookDemo() {
             </div>
 
             {/* Map Placeholder */}
-            <div className="relative rounded-3xl overflow-hidden h-64 shadow-sm border border-slate-100">
+            <div className="hover-3d relative rounded-3xl overflow-hidden h-64 shadow-sm border border-slate-100">
               <img 
-                src="https://images.unsplash.com/photo-1526778548025-fa2f459cd5c1?q=80&w=2066&auto=format&fit=crop" 
+                src="https://images.unsplash.com/photo-1524661135-423995f22d0b?q=80&w=2074&auto=format&fit=crop" 
                 alt="Map" 
-                className="w-full h-full object-cover grayscale opacity-60"
+                className="w-full h-full object-cover grayscale opacity-60 hover:grayscale-0 transition-all duration-500"
               />
               <div className="absolute bottom-4 left-4 bg-white px-4 py-2 rounded-lg shadow-md flex items-center gap-2">
                 <div className="w-2 h-2 bg-blue-600 rounded-full animate-pulse" />
@@ -82,7 +82,7 @@ export default function BookDemo() {
             </div>
 
             {/* Testimonial Card */}
-            <div className="bg-blue-600 p-8 rounded-3xl text-white shadow-xl shadow-blue-500/20">
+            <div className="hover-3d bg-blue-600 p-8 rounded-3xl text-white shadow-xl shadow-blue-500/20">
               <div className="flex gap-1 mb-6">
                 {[1, 2, 3, 4, 5].map((i) => (
                   <Star key={i} size={16} fill="white" />
@@ -92,9 +92,11 @@ export default function BookDemo() {
                 "The high-velocity onboarding experience was unparalleled. We were live in 48 hours."
               </p>
               <div className="flex items-center gap-4">
-                <div className="bg-white/20 p-2 rounded-lg">
-                  <User size={24} />
-                </div>
+                <img 
+                  src="https://i.pravatar.cc/100?u=director" 
+                  alt="Avatar" 
+                  className="w-12 h-12 rounded-xl border-2 border-white/20"
+                />
                 <div>
                   <h4 className="font-bold text-sm">Operations Director</h4>
                   <p className="text-xs text-blue-100">Global Driving Schools</p>
