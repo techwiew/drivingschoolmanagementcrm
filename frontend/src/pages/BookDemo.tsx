@@ -1,7 +1,10 @@
 import { useState } from 'react';
-import { Mail, Phone, MapPin, Star, ArrowRight, Building2 } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
+import data from '../data/frontendData.json';
+import { resolveIcon } from '../utils/iconResolver';
 
 export default function BookDemo() {
+  const { header, contactInfo, testimonial } = data.bookDemo;
   const [formData, setFormData] = useState({
     fullName: '',
     schoolName: '',
@@ -22,18 +25,17 @@ export default function BookDemo() {
         {/* Breadcrumb / Label */}
         <div className="mb-6">
           <span className="bg-cyan-100 text-cyan-600 px-3 py-1 rounded-md text-xs font-bold tracking-wider uppercase">
-            Contact Us
+            {header.label}
           </span>
         </div>
 
         {/* Hero Section */}
         <div className="mb-16">
           <h1 className="text-5xl lg:text-6xl font-bold text-slate-900 mb-6">
-            Let's scale your<br />school's efficiency.
+            {header.title}
           </h1>
           <p className="text-slate-500 text-lg max-w-2xl leading-relaxed">
-            Our team of experts is ready to show you how DriveFlow can transform 
-            your logistics and student management through high-velocity automation.
+            {header.description}
           </p>
         </div>
 
@@ -44,26 +46,26 @@ export default function BookDemo() {
             <div className="hover-3d bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
               <div className="flex items-center gap-4 mb-8">
                 <div className="bg-cyan-100 p-3 rounded-xl text-cyan-600">
-                  <Building2 size={24} />
+                  {resolveIcon('Building2', 24)}
                 </div>
                 <div>
-                  <h3 className="font-bold text-slate-900">Central HQ</h3>
-                  <p className="text-sm text-slate-500">San Francisco, California</p>
+                  <h3 className="font-bold text-slate-900">{contactInfo.hq.title}</h3>
+                  <p className="text-sm text-slate-500">{contactInfo.hq.location}</p>
                 </div>
               </div>
 
               <div className="space-y-6">
                 <div className="flex items-center gap-4 text-slate-600 hover:text-cyan-600 transition-colors cursor-pointer">
-                  <Mail size={20} className="text-blue-500" />
-                  <span className="text-sm font-medium">info@driveflow.com</span>
+                  {resolveIcon('Mail', 20, 'text-blue-500')}
+                  <span className="text-sm font-medium">{contactInfo.hq.email}</span>
                 </div>
                 <div className="flex items-center gap-4 text-slate-600 hover:text-cyan-600 transition-colors cursor-pointer">
-                  <Phone size={20} className="text-blue-500" />
-                  <span className="text-sm font-medium">+1 800-DRIVE-FLOW</span>
+                  {resolveIcon('Phone', 20, 'text-blue-500')}
+                  <span className="text-sm font-medium">{contactInfo.hq.phone}</span>
                 </div>
                 <div className="flex items-center gap-4 text-slate-600 hover:text-cyan-600 transition-colors cursor-pointer">
-                  <MapPin size={20} className="text-blue-500" />
-                  <span className="text-sm font-medium">123 Tech Lane, San Francisco</span>
+                  {resolveIcon('MapPin', 20, 'text-blue-500')}
+                  <span className="text-sm font-medium">{contactInfo.hq.address}</span>
                 </div>
               </div>
             </div>
@@ -71,7 +73,7 @@ export default function BookDemo() {
             {/* Map Placeholder */}
             <div className="hover-3d relative rounded-3xl overflow-hidden h-64 shadow-sm border border-slate-100">
               <img 
-                src="https://images.unsplash.com/photo-1524661135-423995f22d0b?q=80&w=2074&auto=format&fit=crop" 
+                src={contactInfo.mapImage} 
                 alt="Map" 
                 className="w-full h-full object-cover grayscale opacity-60 hover:grayscale-0 transition-all duration-500"
               />
@@ -84,22 +86,22 @@ export default function BookDemo() {
             {/* Testimonial Card */}
             <div className="hover-3d bg-blue-600 p-8 rounded-3xl text-white shadow-xl shadow-blue-500/20">
               <div className="flex gap-1 mb-6">
-                {[1, 2, 3, 4, 5].map((i) => (
-                  <Star key={i} size={16} fill="white" />
+                {[1, 2, 3, 4, 5].map(() => (
+                  resolveIcon('Star', 16, 'fill-white')
                 ))}
               </div>
               <p className="text-lg font-medium leading-relaxed mb-8 italic">
-                "The high-velocity onboarding experience was unparalleled. We were live in 48 hours."
+                "{testimonial.quote}"
               </p>
               <div className="flex items-center gap-4">
                 <img 
-                  src="https://i.pravatar.cc/100?u=director" 
+                  src={testimonial.avatar} 
                   alt="Avatar" 
                   className="w-12 h-12 rounded-xl border-2 border-white/20"
                 />
                 <div>
-                  <h4 className="font-bold text-sm">Operations Director</h4>
-                  <p className="text-xs text-blue-100">Global Driving Schools</p>
+                  <h4 className="font-bold text-sm">{testimonial.author}</h4>
+                  <p className="text-xs text-blue-100">{testimonial.company}</p>
                 </div>
               </div>
             </div>

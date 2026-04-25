@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Menu, X, Car, ArrowRight } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
+import data from '../data/frontendData.json';
 
 export default function PublicNavbar() {
   const [isScrolled, setIsScrolled] = useState(false);
@@ -17,11 +18,7 @@ export default function PublicNavbar() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  const navLinks = [
-    { name: 'Services', path: '/features' },
-    { name: 'Solutions', path: '/about' },
-    { name: 'Contact', path: '/book-demo' },
-  ];
+  const navLinks = data.navbar.links;
 
   const isActive = (path: string) => location.pathname === path;
 

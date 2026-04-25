@@ -1,7 +1,11 @@
-import { ArrowRight, Shield, Users, FileText, Bell } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import data from '../data/frontendData.json';
+import { resolveIcon } from '../utils/iconResolver';
 
 export default function Home() {
+  const { hero, stats, features } = data.home;
+
   return (
     <div className="pt-20">
       {/* Hero Section */}
@@ -15,14 +19,13 @@ export default function Home() {
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                 </span>
-                New: AI-Powered Scheduling
+                {hero.badge}
               </div>
               <h1 className="text-5xl lg:text-6xl font-extrabold text-slate-900 leading-tight mb-6">
                 Manage Your <span className="text-emerald-600">Driving School</span> Efficiency
               </h1>
               <p className="text-xl text-slate-600 mb-8 leading-relaxed">
-                Everything you need to run your driving school in one place. From student enrollment 
-                to resource management and progress tracking.
+                {hero.description}
               </p>
               <div className="flex flex-col sm:flex-row gap-4">
                 <Link
@@ -55,7 +58,7 @@ export default function Home() {
             <div className="relative perspective-1000">
               <div className="bg-white p-4 rounded-[2.5rem] shadow-2xl border border-slate-100 relative z-10 transition-transform duration-700 hover:rotate-y-6 hover:-rotate-x-3 preserve-3d">
                 <img
-                  src="https://images.unsplash.com/photo-1460925895917-afdab827c52f?q=80&w=2026&auto=format&fit=crop"
+                  src={hero.dashboardImage}
                   alt="Dashboard Preview"
                   className="rounded-[1.8rem] shadow-inner"
                 />
@@ -72,12 +75,7 @@ export default function Home() {
       <section className="py-12 bg-white border-y border-slate-100">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
-            {[
-              { label: 'Active Students', value: '10k+' },
-              { label: 'Schools', value: '500+' },
-              { label: 'Success Rate', value: '98%' },
-              { label: 'Support', value: '24/7' },
-            ].map((stat, i) => (
+            {stats.map((stat, i) => (
               <div key={i}>
                 <div className="text-3xl font-bold text-slate-900">{stat.value}</div>
                 <div className="text-slate-500 text-sm mt-1">{stat.label}</div>
@@ -101,41 +99,10 @@ export default function Home() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {[
-              {
-                title: 'Student Tracking',
-                desc: 'Monitor student progress, attendance, and performance in real-time.',
-                icon: <Users className="text-emerald-500" size={32} />,
-                bg: 'bg-emerald-50'
-              },
-              {
-                title: 'Notifications',
-                desc: 'Notifications for upcoming lessons, payments, and mock tests.',
-                icon: <Bell className="text-blue-500" size={32} />,
-                bg: 'bg-blue-50'
-              },
-              {
-                title: 'Resource Management',
-                desc: 'Manage vehicles, trainers, and classrooms efficiently from one dashboard.',
-                icon: <Shield className="text-purple-500" size={32} />,
-                bg: 'bg-purple-50'
-              },
-              {
-                title: 'Mock Tests',
-                desc: 'Create and assign mock theory tests to prepare students for the real deal.',
-                icon: <FileText className="text-indigo-500" size={32} />,
-                bg: 'bg-indigo-50'
-              },
-              {
-                title: 'Trainer Support',
-                desc: 'Dedicated portals for trainers to manage their schedules and students.',
-                icon: <Shield className="text-pink-500" size={32} />,
-                bg: 'bg-pink-50'
-              }
-            ].map((feature, i) => (
+            {features.map((feature, i) => (
               <div key={i} className="hover-3d p-8 rounded-3xl border border-slate-100 bg-white hover:border-blue-200 transition-all group">
                 <div className={`${feature.bg} w-16 h-16 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform`}>
-                  {feature.icon}
+                  {resolveIcon(feature.icon, 32, feature.iconColor)}
                 </div>
                 <h3 className="text-xl font-bold text-slate-900 mb-3">{feature.title}</h3>
                 <p className="text-slate-600 leading-relaxed">

@@ -1,0 +1,193 @@
+{
+  "navbar": {
+    "links": [
+      { "name": "Services", "path": "/features" },
+      { "name": "Solutions", "path": "/about" },
+      { "name": "Contact", "path": "/book-demo" }
+    ]
+  },
+  "home": {
+    "hero": {
+      "badge": "New: AI-Powered Scheduling",
+      "title": "Manage Your Driving School Efficiency",
+      "description": "Everything you need to run your driving school in one place. From student enrollment to resource management and progress tracking.",
+      "dashboardImage": "https://images.unsplash.com/photo-1460925895917-afdab827c52f?q=80&w=2026&auto=format&fit=crop"
+    },
+    "stats": [
+      { "label": "Active Students", "value": "10k+" },
+      { "label": "Schools", "value": "500+" },
+      { "label": "Success Rate", "value": "98%" },
+      { "label": "Support", "value": "24/7" }
+    ],
+    "features": [
+      {
+        "title": "Student Tracking",
+        "desc": "Monitor student progress, attendance, and performance in real-time.",
+        "icon": "Users",
+        "bg": "bg-emerald-50",
+        "iconColor": "text-emerald-500"
+      },
+      {
+        "title": "Notifications",
+        "desc": "Notifications for upcoming lessons, payments, and mock tests.",
+        "icon": "Bell",
+        "bg": "bg-blue-50",
+        "iconColor": "text-blue-500"
+      },
+      {
+        "title": "Resource Management",
+        "desc": "Manage vehicles, trainers, and classrooms efficiently from one dashboard.",
+        "icon": "Shield",
+        "bg": "bg-purple-50",
+        "iconColor": "text-purple-500"
+      },
+      {
+        "title": "Mock Tests",
+        "desc": "Create and assign mock theory tests to prepare students for the real deal.",
+        "icon": "FileText",
+        "bg": "bg-indigo-50",
+        "iconColor": "text-indigo-500"
+      },
+      {
+        "title": "Trainer Support",
+        "desc": "Dedicated portals for trainers to manage their schedules and students.",
+        "icon": "Shield",
+        "bg": "bg-pink-50",
+        "iconColor": "text-pink-500"
+      }
+    ]
+  },
+  "about": {
+    "hero": {
+      "title": "Our Mission",
+      "description": "Empowering driving schools worldwide with technology that simplifies management and enhances the learning experience for every student."
+    },
+    "story": {
+      "title": "Built by Experts for Experts",
+      "paragraphs": [
+        "DriveFlow was founded with a simple goal: to eliminate the paperwork and administrative headaches that slow down driving schools. We understand the unique challenges of managing instructors, vehicles, and student schedules.",
+        "Our team consists of industry veterans and tech enthusiasts who are passionate about road safety and educational technology. We're constantly innovating to stay ahead of the curve."
+      ],
+      "points": [
+        "Student-centric approach",
+        "Instructor-focused tools",
+        "Data-driven insights",
+        "Reliable and secure platform"
+      ],
+      "experience": {
+        "value": "10+",
+        "label": "Years of Experience"
+      },
+      "image": "https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?q=80&w=2070&auto=format&fit=crop"
+    },
+    "values": [
+      {
+        "title": "Innovation",
+        "desc": "We constantly push the boundaries of what is possible in school management.",
+        "icon": "Award",
+        "iconColor": "text-emerald-500"
+      },
+      {
+        "title": "Integrity",
+        "desc": "Transparency and trust are the foundation of our relationships with schools.",
+        "icon": "ShieldCheck",
+        "iconColor": "text-blue-500"
+      },
+      {
+        "title": "Impact",
+        "desc": "We measure our success by the growth and success of the schools we serve.",
+        "icon": "Heart",
+        "iconColor": "text-rose-500"
+      }
+    ]
+  },
+  "featuresPage": {
+    "header": {
+      "title": "Features Designed for Growth",
+      "description": "Every tool you need to run a high-performing driving school, refined by feedback from hundreds of school owners."
+    },
+    "groups": [
+      {
+        "title": "School Administration",
+        "features": [
+          {
+            "name": "Centralized Dashboard",
+            "desc": "Get a bird's eye view of your entire school operation, from student counts to revenue trends.",
+            "icon": "LayoutDashboard"
+          },
+          {
+            "name": "Student Management",
+            "desc": "Comprehensive profiles for every student, tracking their progress, documents, and payments.",
+            "icon": "Users"
+          },
+          {
+            "name": "Trainer Allocation",
+            "desc": "Easily manage instructor schedules and assign them to students based on availability.",
+            "icon": "ClipboardCheck"
+          }
+        ]
+      },
+      {
+        "title": "Learning & Scheduling",
+        "features": [
+          {
+            "name": "Notifications",
+            "desc": "Notifications for upcoming lessons, payments, and mock tests.",
+            "icon": "Bell"
+          },
+          {
+            "name": "Theory Mock Tests",
+            "desc": "Customizable theory tests with real-time results to prepare students for official exams.",
+            "icon": "FileText"
+          },
+          {
+            "name": "Progress Tracking",
+            "desc": "Visual trackers for driving skills and syllabus completion for every student.",
+            "icon": "BarChart3"
+          }
+        ]
+      },
+      {
+        "title": "Experience",
+        "features": [
+          {
+            "name": "Mobile Friendly",
+            "desc": "Access the entire platform from any device, anytime, anywhere.",
+            "icon": "Smartphone"
+          }
+        ]
+      }
+    ],
+    "integration": {
+      "title": "Seamless Integration",
+      "description": "All our features work together perfectly. When a student progresses through a syllabus, their status is updated everywhere. When a trainer completes a lesson, attendance and performance data are synced instantly.",
+      "stats": [
+        { "label": "Uptime", "value": "99.9%" },
+        { "label": "Encryption", "value": "256-bit" }
+      ]
+    }
+  },
+  "bookDemo": {
+    "header": {
+      "label": "Contact Us",
+      "title": "Let's scale your school's efficiency.",
+      "description": "Our team of experts is ready to show you how DriveFlow can transform your logistics and student management through high-velocity automation."
+    },
+    "contactInfo": {
+      "hq": {
+        "title": "Central HQ",
+        "location": "San Francisco, California",
+        "address": "123 Tech Lane, San Francisco",
+        "email": "info@driveflow.com",
+        "phone": "+1 800-DRIVE-FLOW"
+      },
+      "mapImage": "https://images.unsplash.com/photo-1524661135-423995f22d0b?q=80&w=2074&auto=format&fit=crop"
+    },
+    "testimonial": {
+      "quote": "The high-velocity onboarding experience was unparalleled. We were live in 48 hours.",
+      "author": "Operations Director",
+      "company": "Global Driving Schools",
+      "avatar": "https://i.pravatar.cc/100?u=director"
+    }
+  }
+}
