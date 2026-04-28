@@ -10,6 +10,8 @@ const isSameMonth = (value: string, date: Date) => {
   return parsed.getFullYear() === date.getFullYear() && parsed.getMonth() === date.getMonth();
 };
 
+const formatAmount = (value: number) => value.toFixed(0);
+
 export default function AdminDashboard() {
   const { user } = useAuthStore();
   const navigate = useNavigate();
@@ -60,7 +62,7 @@ export default function AdminDashboard() {
     { title: 'Total Students', value: loading ? '...' : students.length, sub: `${allUsers.length} total users`, icon: <Users size={22} />, color: 'bg-blue-500' },
     { title: 'Active Trainers', value: loading ? '...' : trainers.length, sub: 'registered trainers', icon: <Users size={22} />, color: 'bg-emerald-500' },
     { title: 'Upcoming Classes', value: loading ? '...' : upcoming.length, sub: `${schedules.length} total scheduled`, icon: <Calendar size={22} />, color: 'bg-purple-500' },
-    { title: 'Revenue Collected', value: loading ? '...' : `$${revenue.toFixed(0)}`, sub: `$${outstandingBalance.toFixed(0)} remaining due`, icon: <TrendingUp size={22} />, color: 'bg-orange-500' },
+    { title: 'Revenue Collected', value: loading ? '...' : formatAmount(revenue), sub: `${formatAmount(outstandingBalance)} remaining due`, icon: <TrendingUp size={22} />, color: 'bg-orange-500' },
   ];
 
   return (
@@ -107,9 +109,9 @@ export default function AdminDashboard() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
           {[
             { label: 'Students This Month', value: currentMonthStudents, detail: `${lastMonthStudents} last month` },
-            { label: 'Collected This Month', value: `$${collectedThisMonth.toFixed(0)}`, detail: `$${revenue.toFixed(0)} all time` },
-            { label: 'Outstanding Balance', value: `$${outstandingBalance.toFixed(0)}`, detail: `$${pendingTransactions.toFixed(0)} pending transaction amount` },
-            { label: 'Average Payment', value: `$${averagePayment.toFixed(0)}`, detail: `${paidPayments.length} collected payments` },
+            { label: 'Collected This Month', value: formatAmount(collectedThisMonth), detail: `${formatAmount(revenue)} all time` },
+            { label: 'Outstanding Balance', value: formatAmount(outstandingBalance), detail: `${formatAmount(pendingTransactions)} pending transaction amount` },
+            { label: 'Average Payment', value: formatAmount(averagePayment), detail: `${paidPayments.length} collected payments` },
             { label: 'Classes This Month', value: monthClasses.length, detail: `${completedClasses} completed total` }
           ].map(item => (
             <div key={item.label} className="rounded-xl border border-slate-100 bg-slate-50 p-4">
@@ -182,7 +184,7 @@ export default function AdminDashboard() {
                     <span className="text-slate-600 truncate max-w-[100px]">
                       {p.student?.user?.firstName} {p.student?.user?.lastName}
                     </span>
-                    <span className="font-semibold text-slate-800">${p.amount.toFixed(0)}</span>
+                    <span className="font-semibold text-slate-800">{formatAmount(p.amount)}</span>
                     <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
                       p.status === 'PAID' ? 'bg-emerald-100 text-emerald-700' : 'bg-orange-100 text-orange-700'
                     }`}>{p.status}</span>
@@ -220,4 +222,3 @@ export default function AdminDashboard() {
     </div>
   );
 }
-

@@ -34,6 +34,65 @@ const scheduleInclude = {
     student: { include: { user: true } },
     attendances: { include: { student: { include: { user: true } } } }
 };
+const updateScheduleById = async (scheduleId, schoolId, payload) => {
+    const existing = await prisma.classSchedule.findFirst({
+        where: { id: scheduleId, schoolId },
+        include: { trainer: true, student: true }
+    });
+    if (!existing)
+        return { status: 404, body: { error: 'Schedule not found' } };
+    const { trainerId, studentId, startTime, status, notes, courseId } = payload;
+    if (status && !['SCHEDULED', 'COMPLETED', 'CANCELLED'].includes(status)) {
+        return { status: 400, body: { error: 'Invalid status value' } };
+    }
+    let resolvedTrainerId = existing.trainerId;
+    if (trainerId) {
+        const trainerProfile = await resolveTrainerProfile(trainerId);
+        if (!trainerProfile)
+            return { status: 400, body: { error: 'Trainer profile not found' } };
+        resolvedTrainerId = trainerProfile.id;
+    }
+    let resolvedStudentId = existing.studentId;
+    if (studentId) {
+        const studentProfile = await resolveStudentProfile(studentId);
+        if (!studentProfile)
+            return { status: 400, body: { error: 'Student profile not found' } };
+        resolvedStudentId = studentProfile.id;
+    }
+    const schedule = await prisma.classSchedule.update({
+        where: { id: scheduleId },
+        data: {
+            trainerId: resolvedTrainerId,
+            studentId: resolvedStudentId || null,
+            startTime: startTime ? new Date(startTime) : existing.startTime,
+            endTime: null,
+            status: status || existing.status,
+            notes: typeof notes === 'string' ? notes : existing.notes,
+            courseId: courseId || existing.courseId
+        },
+        include: scheduleInclude
+    });
+    return { status: 200, body: { message: 'Schedule updated', schedule } };
+};
+const updateScheduleStatusById = async (scheduleId, schoolId, authUser, status) => {
+    if (!['SCHEDULED', 'COMPLETED', 'CANCELLED'].includes(status)) {
+        return { status: 400, body: { error: 'Invalid status value' } };
+    }
+    const schedule = await prisma.classSchedule.findFirst({
+        where: { id: scheduleId, schoolId },
+        include: { trainer: true }
+    });
+    if (!schedule)
+        return { status: 404, body: { error: 'Schedule not found' } };
+    if (authUser.role === 'TRAINER' && schedule.trainer.userId !== authUser.userId) {
+        return { status: 403, body: { error: 'You can only update status of your assigned classes' } };
+    }
+    const updated = await prisma.classSchedule.update({
+        where: { id: scheduleId },
+        data: { status: status }
+    });
+    return { status: 200, body: { message: 'Schedule updated', schedule: updated } };
+};
 // Get schedules (role-aware)
 router.get('/', async (req, res) => {
     try {
@@ -118,41 +177,22 @@ router.put('/:id', async (req, res) => {
         const authUser = ensureRoles(req, res, ['ADMIN']);
         if (!authUser)
             return;
-        const existing = await prisma.classSchedule.findFirst({
-            where: { id: req.params.id, schoolId: authUser.schoolId },
-            include: { trainer: true, student: true }
-        });
-        if (!existing)
-            return res.status(404).json({ error: 'Schedule not found' });
-        const { trainerId, studentId, startTime, status, notes, courseId } = req.body;
-        let resolvedTrainerId = existing.trainerId;
-        if (trainerId) {
-            const trainerProfile = await resolveTrainerProfile(trainerId);
-            if (!trainerProfile)
-                return res.status(400).json({ error: 'Trainer profile not found' });
-            resolvedTrainerId = trainerProfile.id;
-        }
-        let resolvedStudentId = existing.studentId;
-        if (studentId) {
-            const studentProfile = await resolveStudentProfile(studentId);
-            if (!studentProfile)
-                return res.status(400).json({ error: 'Student profile not found' });
-            resolvedStudentId = studentProfile.id;
-        }
-        const schedule = await prisma.classSchedule.update({
-            where: { id: req.params.id },
-            data: {
-                trainerId: resolvedTrainerId,
-                studentId: resolvedStudentId || null,
-                startTime: startTime ? new Date(startTime) : existing.startTime,
-                endTime: null,
-                status: status || existing.status,
-                notes: typeof notes === 'string' ? notes : existing.notes,
-                courseId: courseId || existing.courseId
-            },
-            include: scheduleInclude
-        });
-        res.json({ message: 'Schedule updated', schedule });
+        const result = await updateScheduleById(req.params.id, authUser.schoolId, req.body || {});
+        res.status(result.status).json(result.body);
+    }
+    catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Failed to update schedule', details: error.message });
+    }
+});
+// Fallback for hosting environments that block PUT at edge level.
+router.post('/:id/update', async (req, res) => {
+    try {
+        const authUser = ensureRoles(req, res, ['ADMIN']);
+        if (!authUser)
+            return;
+        const result = await updateScheduleById(req.params.id, authUser.schoolId, req.body || {});
+        res.status(result.status).json(result.body);
     }
     catch (error) {
         console.error(error);
@@ -165,24 +205,21 @@ router.patch('/:id/status', async (req, res) => {
         const authUser = ensureRoles(req, res, ['ADMIN', 'TRAINER']);
         if (!authUser)
             return;
-        const { status } = req.body;
-        if (!['SCHEDULED', 'COMPLETED', 'CANCELLED'].includes(status)) {
-            return res.status(400).json({ error: 'Invalid status value' });
-        }
-        const schedule = await prisma.classSchedule.findFirst({
-            where: { id: req.params.id, schoolId: authUser.schoolId },
-            include: { trainer: true }
-        });
-        if (!schedule)
-            return res.status(404).json({ error: 'Schedule not found' });
-        if (authUser.role === 'TRAINER' && schedule.trainer.userId !== authUser.userId) {
-            return res.status(403).json({ error: 'You can only update status of your assigned classes' });
-        }
-        const updated = await prisma.classSchedule.update({
-            where: { id: req.params.id },
-            data: { status }
-        });
-        res.json({ message: 'Schedule updated', schedule: updated });
+        const result = await updateScheduleStatusById(req.params.id, authUser.schoolId, authUser, String(req.body?.status || ''));
+        res.status(result.status).json(result.body);
+    }
+    catch (error) {
+        res.status(500).json({ error: 'Failed to update schedule', details: error.message });
+    }
+});
+// Fallback for hosting environments that block PATCH at edge level.
+router.post('/:id/status/update', async (req, res) => {
+    try {
+        const authUser = ensureRoles(req, res, ['ADMIN', 'TRAINER']);
+        if (!authUser)
+            return;
+        const result = await updateScheduleStatusById(req.params.id, authUser.schoolId, authUser, String(req.body?.status || ''));
+        res.status(result.status).json(result.body);
     }
     catch (error) {
         res.status(500).json({ error: 'Failed to update schedule', details: error.message });

@@ -133,6 +133,27 @@ const parseAdultDateOfBirth = (value: unknown) => {
   return { ok: true as const, value: parsed };
 };
 
+const parseOptionalDate = (value: unknown, fieldLabel: string) => {
+  if (value === undefined || value === null || value === '') {
+    return { ok: true as const, value: null as Date | null };
+  }
+
+  const parsed = new Date(String(value));
+  if (Number.isNaN(parsed.getTime())) {
+    return { ok: false as const, error: `${fieldLabel} is invalid.` };
+  }
+
+  return { ok: true as const, value: parsed };
+};
+
+const normalizeTenDigitMobile = (value: unknown) => {
+  const digits = String(value || '').replace(/\D/g, '');
+  if (!/^\d{10}$/.test(digits)) {
+    return { ok: false as const, error: 'Mobile number must be exactly 10 digits.' };
+  }
+  return { ok: true as const, value: digits };
+};
+
 const calculateAge = (dateOfBirth: Date | null | undefined) => {
   if (!dateOfBirth) return null;
   const today = new Date();
@@ -149,7 +170,7 @@ const calculateAge = (dateOfBirth: Date | null | undefined) => {
 // -----------------------------------------
 
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'OK', message: 'DriveFlow API is running' });
+  res.json({ status: 'OK', message: 'drivingsync API is running' });
 });
 
 app.post('/api/super-admin/login', async (req, res) => {
@@ -327,7 +348,7 @@ app.post('/api/setup', async (req, res) => {
     }
 
     const school = await prisma.school.create({
-      data: { name: 'DriveFlow Academy', contactEmail: 'admin@driveflow.com' }
+      data: { name: 'drivingsync Academy', contactEmail: 'admin@drivingsync.com' }
     });
 
     const [adminHash, trainerHash, studentHash] = await Promise.all([
@@ -339,7 +360,7 @@ app.post('/api/setup', async (req, res) => {
     await prisma.user.create({
       data: {
         schoolId: school.id,
-        email: 'admin@driveflow.com',
+        email: 'admin@drivingsync.com',
         passwordHash: adminHash,
         role: Role.ADMIN,
         firstName: 'Super',
@@ -350,7 +371,7 @@ app.post('/api/setup', async (req, res) => {
     const trainerUser = await prisma.user.create({
       data: {
         schoolId: school.id,
-        email: 'trainer@driveflow.com',
+        email: 'trainer@drivingsync.com',
         passwordHash: trainerHash,
         role: Role.TRAINER,
         firstName: 'John',
@@ -362,7 +383,7 @@ app.post('/api/setup', async (req, res) => {
     const studentUser = await prisma.user.create({
       data: {
         schoolId: school.id,
-        email: 'student@driveflow.com',
+        email: 'student@drivingsync.com',
         passwordHash: studentHash,
         role: Role.STUDENT,
         firstName: 'Jane',
@@ -455,9 +476,9 @@ app.post('/api/setup', async (req, res) => {
     res.json({
       message: 'Setup complete! You can now login with these credentials:',
       credentials: {
-        admin: { email: 'admin@driveflow.com', password: 'Admin@123' },
-        trainer: { email: 'trainer@driveflow.com', password: 'Trainer@123' },
-        student: { email: 'student@driveflow.com', password: 'Student@123' }
+        admin: { email: 'admin@drivingsync.com', password: 'Admin@123' },
+        trainer: { email: 'trainer@drivingsync.com', password: 'Trainer@123' },
+        student: { email: 'student@drivingsync.com', password: 'Student@123' }
       }
     });
   } catch (error: any) {
@@ -531,6 +552,9 @@ app.get('/api/users', requireRoles('ADMIN', 'TRAINER', 'STUDENT'), async (req, r
           phone: true,
           location: true,
           dateOfBirth: true,
+          admissionDate: true,
+          classType: true,
+          joiningDate: true,
           createdAt: true,
           studentProfile: true
         },
@@ -567,6 +591,9 @@ app.get('/api/users', requireRoles('ADMIN', 'TRAINER', 'STUDENT'), async (req, r
         phone: p.user.phone,
         location: p.user.location,
         dateOfBirth: p.user.dateOfBirth,
+        admissionDate: p.user.admissionDate,
+        classType: p.user.classType,
+        joiningDate: p.user.joiningDate,
         createdAt: p.user.createdAt,
         studentProfile: {
           id: p.id,
@@ -591,6 +618,9 @@ app.get('/api/users', requireRoles('ADMIN', 'TRAINER', 'STUDENT'), async (req, r
         phone: true,
         location: true,
         dateOfBirth: true,
+        admissionDate: true,
+        classType: true,
+        joiningDate: true,
         createdAt: true,
         studentProfile: true
       }
@@ -601,14 +631,27 @@ app.get('/api/users', requireRoles('ADMIN', 'TRAINER', 'STUDENT'), async (req, r
   }
 });
 
-app.post('/api/users', requireRoles('ADMIN'), upload.array('documents', 4), async (req, res) => {
+app.post('/api/users', requireRoles('ADMIN'), async (req, res) => {
   try {
     const authUser = getSchoolUserOrFail(req, res);
     if (!authUser) return;
 
-    const { email, password, firstName, lastName, role, phone, location, dateOfBirth, totalAmount } = req.body;
+    const {
+      email,
+      password,
+      firstName,
+      lastName,
+      role,
+      phone,
+      location,
+      dateOfBirth,
+      totalAmount,
+      admissionDate,
+      classType,
+      joiningDate
+    } = req.body;
 
-    if (!email || !password || !firstName || !lastName || !role || !phone || !location || !dateOfBirth) {
+    if (!email || !password || !firstName || !lastName || !role || !phone || !location || !dateOfBirth || !admissionDate) {
       return res.status(400).json({ error: 'Cannot create user because required fields are missing.' });
     }
 
@@ -620,14 +663,33 @@ app.post('/api/users', requireRoles('ADMIN'), upload.array('documents', 4), asyn
       return res.status(400).json({ error: 'Cannot create user because the selected role is invalid.' });
     }
 
+    const parsedPhone = normalizeTenDigitMobile(phone);
+    if (!parsedPhone.ok) {
+      return res.status(400).json({ error: parsedPhone.error });
+    }
+
     const parsedDob = parseAdultDateOfBirth(dateOfBirth);
     if (!parsedDob.ok) {
       return res.status(400).json({ error: parsedDob.error });
     }
 
+    const parsedAdmissionDate = parseOptionalDate(admissionDate, 'Admission date');
+    if (!parsedAdmissionDate.ok || !parsedAdmissionDate.value) {
+      return res.status(400).json({ error: parsedAdmissionDate.ok ? 'Admission date is required.' : parsedAdmissionDate.error });
+    }
+
+    const parsedJoiningDate = parseOptionalDate(joiningDate, 'Joining date');
+    if (!parsedJoiningDate.ok) {
+      return res.status(400).json({ error: parsedJoiningDate.error });
+    }
+
     const parsedTotalAmount = totalAmount === '' || totalAmount === undefined ? 0 : Number(totalAmount);
     if (role === 'STUDENT' && (!Number.isFinite(parsedTotalAmount) || parsedTotalAmount < 0)) {
       return res.status(400).json({ error: 'Cannot create student because the total payment amount is invalid.' });
+    }
+
+    if (role === 'TRAINER' && !parsedJoiningDate.value) {
+      return res.status(400).json({ error: 'Joining date is required for trainer.' });
     }
 
     const existingUser = await prisma.user.findUnique({ where: { email } });
@@ -646,9 +708,12 @@ app.post('/api/users', requireRoles('ADMIN'), upload.array('documents', 4), asyn
           firstName,
           lastName,
           role,
-          phone,
+          phone: parsedPhone.value,
           location,
-          dateOfBirth: parsedDob.value
+          dateOfBirth: parsedDob.value,
+          admissionDate: parsedAdmissionDate.value,
+          classType: typeof classType === 'string' ? classType.trim() || null : null,
+          joiningDate: role === 'TRAINER' ? parsedJoiningDate.value : null
         }
       });
 
@@ -666,24 +731,6 @@ app.post('/api/users', requireRoles('ADMIN'), upload.array('documents', 4), asyn
 
       return createdUser;
     });
-
-    if (req.files && Array.isArray(req.files)) {
-      for (let i = 0; i < req.files.length; i++) {
-        const file = req.files[i];
-        const remark = req.body[`remark_${i}`] || null;
-
-        await prisma.document.create({
-          data: {
-            userId: user.id,
-            fileName: file.originalname,
-            fileType: file.mimetype,
-            fileSize: file.size,
-            fileUrl: `/uploads/${file.filename}`,
-            remark
-          }
-        });
-      }
-    }
 
     res.status(201).json({
       message: `${user.firstName} ${user.lastName} (${user.role}) was added successfully.`,
@@ -710,12 +757,30 @@ app.put('/api/users/:id', requireRoles('ADMIN'), async (req, res) => {
     });
     if (!target) return res.status(404).json({ error: 'User not found' });
 
-    const { firstName, lastName, email, phone, location, dateOfBirth, status, password } = req.body;
+    const {
+      firstName,
+      lastName,
+      email,
+      phone,
+      location,
+      dateOfBirth,
+      status,
+      password,
+      admissionDate,
+      classType,
+      joiningDate
+    } = req.body;
     const data: any = {};
     if (typeof firstName === 'string') data.firstName = firstName;
     if (typeof lastName === 'string') data.lastName = lastName;
     if (typeof email === 'string') data.email = email;
-    if (typeof phone === 'string') data.phone = phone;
+    if (typeof phone === 'string') {
+      const parsedPhone = normalizeTenDigitMobile(phone);
+      if (!parsedPhone.ok) {
+        return res.status(400).json({ error: parsedPhone.error });
+      }
+      data.phone = parsedPhone.value;
+    }
     if (typeof location === 'string') data.location = location;
     if (typeof status === 'string' && ['ACTIVE', 'LOCKED'].includes(status)) data.status = status;
     if (dateOfBirth) {
@@ -724,6 +789,23 @@ app.put('/api/users/:id', requireRoles('ADMIN'), async (req, res) => {
         return res.status(400).json({ error: parsedDob.error });
       }
       data.dateOfBirth = parsedDob.value;
+    }
+    if (admissionDate !== undefined) {
+      const parsedAdmissionDate = parseOptionalDate(admissionDate, 'Admission date');
+      if (!parsedAdmissionDate.ok) {
+        return res.status(400).json({ error: parsedAdmissionDate.error });
+      }
+      data.admissionDate = parsedAdmissionDate.value;
+    }
+    if (classType !== undefined) {
+      data.classType = typeof classType === 'string' ? classType.trim() || null : null;
+    }
+    if (joiningDate !== undefined) {
+      const parsedJoiningDate = parseOptionalDate(joiningDate, 'Joining date');
+      if (!parsedJoiningDate.ok) {
+        return res.status(400).json({ error: parsedJoiningDate.error });
+      }
+      data.joiningDate = parsedJoiningDate.value;
     }
     if (password) data.passwordHash = await bcrypt.hash(password, 10);
 
@@ -740,6 +822,9 @@ app.put('/api/users/:id', requireRoles('ADMIN'), async (req, res) => {
         phone: true,
         location: true,
         dateOfBirth: true,
+        admissionDate: true,
+        classType: true,
+        joiningDate: true,
         createdAt: true
       }
     });
@@ -768,6 +853,9 @@ app.get('/api/users/:id/details', requireRoles('ADMIN'), async (req, res) => {
         phone: true,
         location: true,
         dateOfBirth: true,
+        admissionDate: true,
+        classType: true,
+        joiningDate: true,
         createdAt: true
       }
     });
@@ -847,7 +935,7 @@ app.get('/api/users/:id/details', requireRoles('ADMIN'), async (req, res) => {
           totalFees,
           totalPaid: studentProfile.totalPaid ?? totalPaidFromPayments,
           balanceDue: studentProfile.balanceDue ?? 0,
-          joinedOn: target.createdAt,
+          joinedOn: target.admissionDate || target.createdAt,
           age: calculateAge(target.dateOfBirth),
           firstJoinedClassAt,
           latestPaymentAt,
@@ -931,27 +1019,96 @@ app.get('/api/users/:id/documents', requireRoles('ADMIN', 'TRAINER', 'STUDENT'),
   }
 });
 
-app.patch('/api/users/:id/status', requireRoles('ADMIN'), async (req, res) => {
+app.post('/api/users/:id/documents', requireRoles('ADMIN', 'TRAINER', 'STUDENT'), upload.array('documents', 10), async (req, res) => {
   try {
     const authUser = getSchoolUserOrFail(req, res);
     if (!authUser) return;
     const targetUserId = String(req.params.id);
-
-    const { status } = req.body;
-    if (!['ACTIVE', 'LOCKED'].includes(status)) {
-      return res.status(400).json({ error: 'Invalid status' });
-    }
 
     const target = await prisma.user.findFirst({
       where: { id: targetUserId, schoolId: authUser.schoolId }
     });
     if (!target) return res.status(404).json({ error: 'User not found' });
 
-    const user = await prisma.user.update({
-      where: { id: target.id },
-      data: { status }
-    });
-    res.json({ message: 'Status updated', user: { id: user.id, status: user.status } });
+    if (authUser.role !== 'ADMIN' && authUser.userId !== target.id) {
+      return res.status(403).json({ error: 'You can upload documents only for your own account.' });
+    }
+
+    if (!Array.isArray(req.files) || req.files.length === 0) {
+      return res.status(400).json({ error: 'At least one document file is required.' });
+    }
+
+    const files = req.files as Express.Multer.File[];
+    const created = [];
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const documentName = String(req.body[`documentName_${i}`] || '').trim();
+
+      if (!documentName) {
+        return res.status(400).json({ error: `Document name is required for file #${i + 1}.` });
+      }
+
+      const record = await prisma.document.create({
+        data: {
+          userId: target.id,
+          fileName: documentName,
+          fileType: file.mimetype,
+          fileSize: file.size,
+          fileUrl: `/uploads/${file.filename}`,
+          remark: file.originalname
+        }
+      });
+      created.push(record);
+    }
+
+    res.status(201).json({ message: 'Documents uploaded successfully', documents: created });
+  } catch (error: any) {
+    res.status(500).json({ error: 'Failed to upload documents', details: error.message });
+  }
+});
+
+const updateUserStatusById = async (schoolId: string, targetUserId: string, status: string) => {
+  if (!['ACTIVE', 'LOCKED'].includes(status)) {
+    return { status: 400, body: { error: 'Invalid status' } };
+  }
+
+  const target = await prisma.user.findFirst({
+    where: { id: targetUserId, schoolId }
+  });
+  if (!target) return { status: 404, body: { error: 'User not found' } };
+
+  const user = await prisma.user.update({
+    where: { id: target.id },
+    data: { status: status as UserStatus }
+  });
+
+  return {
+    status: 200,
+    body: { message: 'Status updated', user: { id: user.id, status: user.status } }
+  };
+};
+
+app.patch('/api/users/:id/status', requireRoles('ADMIN'), async (req, res) => {
+  try {
+    const authUser = getSchoolUserOrFail(req, res);
+    if (!authUser) return;
+
+    const result = await updateUserStatusById(authUser.schoolId, String(req.params.id), String(req.body?.status || ''));
+    res.status(result.status).json(result.body);
+  } catch (error: any) {
+    res.status(500).json({ error: 'Failed to update user status', details: error.message });
+  }
+});
+
+// Fallback for hosting environments that block PATCH at edge level.
+app.post('/api/users/:id/status/update', requireRoles('ADMIN'), async (req, res) => {
+  try {
+    const authUser = getSchoolUserOrFail(req, res);
+    if (!authUser) return;
+
+    const result = await updateUserStatusById(authUser.schoolId, String(req.params.id), String(req.body?.status || ''));
+    res.status(result.status).json(result.body);
   } catch (error: any) {
     res.status(500).json({ error: 'Failed to update user status', details: error.message });
   }

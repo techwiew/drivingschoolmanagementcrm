@@ -65,7 +65,7 @@
     "story": {
       "title": "Built by Experts for Experts",
       "paragraphs": [
-        "DriveFlow was founded with a simple goal: to eliminate the paperwork and administrative headaches that slow down driving schools. We understand the unique challenges of managing instructors, vehicles, and student schedules.",
+        "drivingsync was founded with a simple goal: to eliminate the paperwork and administrative headaches that slow down driving schools. We understand the unique challenges of managing instructors, vehicles, and student schedules.",
         "Our team consists of industry veterans and tech enthusiasts who are passionate about road safety and educational technology. We're constantly innovating to stay ahead of the curve."
       ],
       "points": [
@@ -171,14 +171,14 @@
     "header": {
       "label": "Contact Us",
       "title": "Let's scale your school's efficiency.",
-      "description": "Our team of experts is ready to show you how DriveFlow can transform your logistics and student management through high-velocity automation."
+      "description": "Our team of experts is ready to show you how drivingsync can transform your logistics and student management through high-velocity automation."
     },
     "contactInfo": {
       "hq": {
         "title": "Central HQ",
         "location": "San Francisco, California",
         "address": "123 Tech Lane, San Francisco",
-        "email": "info@driveflow.com",
+        "email": "info@drivingsync.com",
         "phone": "+1 800-DRIVE-FLOW"
       },
       "mapImage": "https://images.unsplash.com/photo-1524661135-423995f22d0b?q=80&w=2074&auto=format&fit=crop"
@@ -191,3 +191,4 @@
     }
   }
 }
+

@@ -38,6 +38,17 @@ type Notice = { type: 'success' | 'error'; text: string } | null;
 const getErrorMessage = (err: any, fallback: string) =>
   err.response?.data?.error || err.response?.data?.details || err.message || fallback;
 
+const updateScheduleWithFallback = async (scheduleId: string, payload: Record<string, unknown>) => {
+  try {
+    return await api.put(`/schedules/${scheduleId}`, payload);
+  } catch (err: any) {
+    if (err.response?.status === 403 || err.response?.status === 405) {
+      return api.post(`/schedules/${scheduleId}/update`, payload);
+    }
+    throw err;
+  }
+};
+
 const RequiredLabel = ({ children }: { children: React.ReactNode }) => (
   <label className="block text-sm font-medium text-slate-700 mb-1">
     {children} <span className="text-red-500">*</span>
@@ -135,7 +146,7 @@ export default function Schedule() {
       };
 
       if (editingScheduleId) {
-        await api.put(`/schedules/${editingScheduleId}`, payload);
+        await updateScheduleWithFallback(editingScheduleId, payload);
       } else {
         await api.post('/schedules', payload);
       }

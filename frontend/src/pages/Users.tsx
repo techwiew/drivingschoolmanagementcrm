@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Download, Eye, FileText, Loader2, Lock, Pencil, Plus, Search, Trash2, Unlock, X } from 'lucide-react';
 import { api } from '../lib/axios';
 import { useAuthStore } from '../store/authStore';
@@ -13,6 +13,9 @@ interface UserData {
   phone?: string;
   location?: string;
   dateOfBirth?: string;
+  admissionDate?: string;
+  classType?: string;
+  joiningDate?: string;
   createdAt: string;
   studentProfile?: {
     id: string;
@@ -39,6 +42,9 @@ type UserDetails = {
   phone?: string;
   location?: string;
   dateOfBirth?: string;
+  admissionDate?: string;
+  classType?: string;
+  joiningDate?: string;
   createdAt: string;
   documents?: DocumentData[];
   studentProfile?: {
@@ -111,6 +117,7 @@ type EditUserForm = {
 };
 
 type Notice = { type: 'success' | 'error'; text: string } | null;
+type UploadRow = { documentName: string; file: File | null };
 
 const getErrorMessage = (err: any, fallback: string) =>
   err.response?.data?.error || err.response?.data?.details || err.message || fallback;
@@ -157,18 +164,23 @@ export default function Users() {
   });
 
   const [formData, setFormData] = useState({
+    role: 'STUDENT',
     firstName: '',
     lastName: '',
     email: '',
     password: '',
-    role: 'STUDENT',
     phone: '',
     location: '',
     dateOfBirth: '',
+    admissionDate: '',
+    classType: '',
+    joiningDate: '',
     totalAmount: ''
   });
-
-  const [documents, setDocuments] = useState<{ file: File; remark: string }[]>([]);
+  const [searchText, setSearchText] = useState('');
+  const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+  const [uploadingDocs, setUploadingDocs] = useState(false);
+  const [uploadRows, setUploadRows] = useState<UploadRow[]>([{ documentName: '', file: null }]);
 
   const [viewingDocsUserId, setViewingDocsUserId] = useState<string | null>(null);
   const [userDocs, setUserDocs] = useState<DocumentData[]>([]);
@@ -192,71 +204,76 @@ export default function Users() {
     fetchUsers();
   }, []);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.files) return;
+  const filteredUsers = useMemo(() => {
+    const query = searchText.trim().toLowerCase();
+    if (!query) return users;
 
-    const selectedFiles = Array.from(e.target.files);
-    const validFiles = selectedFiles.filter((file) => {
-      if (file.size > 1024 * 1024) {
-        setNotice({ type: 'error', text: `Cannot upload ${file.name} because it is larger than the 1MB limit.` });
-        return false;
+    const scoreUser = (candidate: UserData) => {
+      const name = `${candidate.firstName} ${candidate.lastName}`.toLowerCase();
+      const email = (candidate.email || '').toLowerCase();
+      const phone = (candidate.phone || '').toLowerCase();
+      const role = (candidate.role || '').toLowerCase();
+      const location = (candidate.location || '').toLowerCase();
+      const searchable = [name, email, phone, role, location];
+
+      if (!searchable.some((value) => value.includes(query))) {
+        return -1;
       }
-      return true;
-    });
+      if (name.startsWith(query)) return 5;
+      if (email.startsWith(query)) return 4;
+      if (phone.startsWith(query)) return 3;
+      return 2;
+    };
 
-    if (documents.length + validFiles.length > 4) {
-      setNotice({ type: 'error', text: 'Cannot upload documents because only 4 files are allowed.' });
-      return;
-    }
+    return [...users].sort((a, b) => scoreUser(b) - scoreUser(a));
+  }, [users, searchText]);
 
-    setDocuments((prev) => [
-      ...prev,
-      ...validFiles.map((file) => ({ file, remark: '' }))
-    ]);
-  };
-
-  const removeDocument = (index: number) => {
-    setDocuments((prev) => prev.filter((_, i) => i !== index));
-  };
-
-  const updateDocumentRemark = (index: number, remark: string) => {
-    setDocuments((prev) => {
-      const next = [...prev];
-      next[index].remark = remark;
-      return next;
-    });
-  };
+  const sanitizePhone = (value: string) => value.replace(/\D/g, '').slice(0, 10);
 
   const handleAddUser = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
     setNotice(null);
     try {
-      const submitData = new FormData();
-      Object.entries(formData).forEach(([key, value]) => submitData.append(key, value));
-      documents.forEach((doc, index) => {
-        submitData.append('documents', doc.file);
-        submitData.append(`remark_${index}`, doc.remark);
-      });
+      if (!/^\d{10}$/.test(formData.phone)) {
+        setNotice({ type: 'error', text: 'Mobile number must be exactly 10 digits.' });
+        setSaving(false);
+        return;
+      }
 
-      const res = await api.post('/users', submitData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
+      if (!formData.admissionDate) {
+        setNotice({ type: 'error', text: 'Admission date is required.' });
+        setSaving(false);
+        return;
+      }
+
+      if (formData.role === 'TRAINER' && !formData.joiningDate) {
+        setNotice({ type: 'error', text: 'Joining date is required for trainer.' });
+        setSaving(false);
+        return;
+      }
+
+      const res = await api.post('/users', {
+        ...formData,
+        joiningDate: formData.role === 'TRAINER' ? formData.joiningDate : ''
       });
 
       setIsModalOpen(false);
       setNotice({ type: 'success', text: res.data?.message || `${formData.firstName} ${formData.lastName} was added successfully.` });
       setFormData({
+        role: 'STUDENT',
         firstName: '',
         lastName: '',
         email: '',
         password: '',
-        role: 'STUDENT',
         phone: '',
         location: '',
         dateOfBirth: '',
+        admissionDate: '',
+        classType: '',
+        joiningDate: '',
         totalAmount: ''
       });
-      setDocuments([]);
       fetchUsers();
     } catch (err: any) {
       setNotice({ type: 'error', text: getErrorMessage(err, 'Cannot create user right now.') });
@@ -285,6 +302,12 @@ export default function Users() {
     setEditing(true);
     setNotice(null);
     try {
+      if (editForm.phone && !/^\d{10}$/.test(editForm.phone)) {
+        setNotice({ type: 'error', text: 'Mobile number must be exactly 10 digits.' });
+        setEditing(false);
+        return;
+      }
+
       const payload: any = {
         firstName: editForm.firstName,
         lastName: editForm.lastName,
@@ -312,11 +335,85 @@ export default function Users() {
     setNotice(null);
     try {
       const newStatus = currentStatus === 'ACTIVE' ? 'LOCKED' : 'ACTIVE';
-      await api.patch(`/users/${id}/status`, { status: newStatus });
+      try {
+        await api.patch(`/users/${id}/status`, { status: newStatus });
+      } catch (err: any) {
+        if (err.response?.status === 403 || err.response?.status === 405) {
+          await api.post(`/users/${id}/status/update`, { status: newStatus });
+        } else {
+          throw err;
+        }
+      }
       setNotice({ type: 'success', text: `User status changed to ${newStatus}.` });
       fetchUsers();
     } catch (err: any) {
       setNotice({ type: 'error', text: getErrorMessage(err, 'Cannot update user status right now.') });
+    }
+  };
+
+  const openUploadModal = () => {
+    setUploadRows([{ documentName: '', file: null }]);
+    setIsUploadModalOpen(true);
+  };
+
+  const addUploadRow = () => {
+    setUploadRows((prev) => [...prev, { documentName: '', file: null }]);
+  };
+
+  const updateUploadRow = (index: number, patch: Partial<UploadRow>) => {
+    setUploadRows((prev) => prev.map((row, i) => (i === index ? { ...row, ...patch } : row)));
+  };
+
+  const removeUploadRow = (index: number) => {
+    setUploadRows((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const submitUploadDocuments = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user?.id) return;
+
+    setUploadingDocs(true);
+    setNotice(null);
+    try {
+      const form = new FormData();
+      for (let i = 0; i < uploadRows.length; i++) {
+        const row = uploadRows[i];
+        if (!row.documentName.trim()) {
+          setNotice({ type: 'error', text: `Document name is required in row ${i + 1}.` });
+          setUploadingDocs(false);
+          return;
+        }
+        if (!row.file) {
+          setNotice({ type: 'error', text: `Please choose a document file in row ${i + 1}.` });
+          setUploadingDocs(false);
+          return;
+        }
+        if (row.file.size > 1024 * 1024) {
+          setNotice({ type: 'error', text: `${row.file.name} exceeds the 1MB file limit.` });
+          setUploadingDocs(false);
+          return;
+        }
+
+        form.append('documents', row.file);
+        form.append(`documentName_${i}`, row.documentName.trim());
+      }
+
+      await api.post(`/users/${user.id}/documents`, form, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+
+      setNotice({ type: 'success', text: 'Documents uploaded successfully.' });
+      setIsUploadModalOpen(false);
+      if (viewingDocsUserId === user.id) {
+        viewUserDocuments(user.id);
+      }
+      if (viewingDetailsUserId === user.id) {
+        viewUserDetails(user.id);
+      }
+    } catch (err: any) {
+      setNotice({ type: 'error', text: getErrorMessage(err, 'Cannot upload documents right now.') });
+    } finally {
+      setUploadingDocs(false);
     }
   };
 
@@ -381,21 +478,29 @@ export default function Users() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-wrap justify-between items-center gap-3">
         <div>
           <h1 className="text-2xl font-bold text-slate-800">User Management</h1>
           <p className="text-slate-500">
             {isAdmin ? 'Manage students and trainers.' : 'View your accessible users.'}
           </p>
         </div>
-        {isAdmin && (
+        <div className="flex gap-2">
           <button
-            onClick={() => setIsModalOpen(true)}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg transition-colors shadow-sm flex items-center gap-2"
+            onClick={openUploadModal}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors shadow-sm flex items-center gap-2"
           >
-            <Plus size={18} /> Add User
+            <FileText size={18} /> Upload Document
           </button>
-        )}
+          {isAdmin && (
+            <button
+              onClick={() => setIsModalOpen(true)}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg transition-colors shadow-sm flex items-center gap-2"
+            >
+              <Plus size={18} /> Add User
+            </button>
+          )}
+        </div>
       </div>
 
       {notice && (
@@ -415,6 +520,8 @@ export default function Users() {
             <input
               type="text"
               placeholder="Search users..."
+              value={searchText}
+              onChange={(e) => setSearchText(e.target.value)}
               className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
             />
           </div>
@@ -435,7 +542,7 @@ export default function Users() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {users.map((u) => (
+              {filteredUsers.map((u) => (
                 <tr key={u.id} className="hover:bg-slate-50/50 transition-colors">
                   <td className="px-6 py-4">
                     <div className="font-medium text-slate-800">{u.firstName} {u.lastName}</div>
@@ -514,7 +621,7 @@ export default function Users() {
                   </td>
                 </tr>
               ))}
-              {users.length === 0 && (
+              {filteredUsers.length === 0 && (
                 <tr>
                   <td colSpan={4} className="p-8 text-center text-slate-400">No users found.</td>
                 </tr>
@@ -535,6 +642,18 @@ export default function Users() {
             </div>
             <div className="overflow-y-auto p-6">
               <form id="addUserForm" onSubmit={handleAddUser} className="space-y-4">
+                <div>
+                  <RequiredLabel>Role</RequiredLabel>
+                  <select
+                    value={formData.role}
+                    onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+                    className="w-full border border-slate-200 rounded-lg p-2.5"
+                  >
+                    <option value="STUDENT">Student</option>
+                    <option value="TRAINER">Trainer</option>
+                  </select>
+                </div>
+
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <RequiredLabel>First Name</RequiredLabel>
@@ -560,7 +679,16 @@ export default function Users() {
                 <div className="grid grid-cols-3 gap-4">
                   <div>
                     <RequiredLabel>Mobile Number</RequiredLabel>
-                    <input type="tel" required value={formData.phone} onChange={(e) => setFormData({ ...formData, phone: e.target.value })} className="w-full border border-slate-200 rounded-lg p-2.5" />
+                    <input
+                      type="tel"
+                      required
+                      inputMode="numeric"
+                      maxLength={10}
+                      pattern="\d{10}"
+                      value={formData.phone}
+                      onChange={(e) => setFormData({ ...formData, phone: sanitizePhone(e.target.value) })}
+                      className="w-full border border-slate-200 rounded-lg p-2.5"
+                    />
                   </div>
                   <div>
                     <RequiredLabel>Location</RequiredLabel>
@@ -574,63 +702,57 @@ export default function Users() {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <RequiredLabel>Role</RequiredLabel>
-                    <select value={formData.role} onChange={(e) => setFormData({ ...formData, role: e.target.value })} className="w-full border border-slate-200 rounded-lg p-2.5">
-                      <option value="STUDENT">Student</option>
-                      <option value="TRAINER">Trainer</option>
-                    </select>
+                    <RequiredLabel>Admission Date</RequiredLabel>
+                    <input
+                      type="date"
+                      required
+                      value={formData.admissionDate}
+                      onChange={(e) => setFormData({ ...formData, admissionDate: e.target.value })}
+                      className="w-full border border-slate-200 rounded-lg p-2.5"
+                    />
                   </div>
-                  {formData.role === 'STUDENT' && (
-                    <div>
-                      <RequiredLabel>Total Fees</RequiredLabel>
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        required
-                        value={formData.totalAmount}
-                        onChange={(e) => setFormData({ ...formData, totalAmount: e.target.value })}
-                        className="w-full border border-slate-200 rounded-lg p-2.5"
-                        placeholder="0.00"
-                      />
-                    </div>
-                  )}
+                  <div>
+                    <RequiredLabel>Class Type</RequiredLabel>
+                    <input
+                      type="text"
+                      required
+                      value={formData.classType}
+                      onChange={(e) => setFormData({ ...formData, classType: e.target.value })}
+                      className="w-full border border-slate-200 rounded-lg p-2.5"
+                      placeholder="Manual / Automatic / LMV"
+                    />
+                  </div>
                 </div>
 
-                <div className="mt-6 border-t border-slate-100 pt-4">
-                  <div className="flex justify-between items-center mb-2">
-                    <label className="block text-sm font-medium text-slate-700">Documents (Max 4, 1MB each)</label>
-                    <label className={`text-sm px-3 py-1.5 rounded-lg cursor-pointer ${documents.length >= 4 ? 'bg-slate-100 text-slate-400 pointer-events-none' : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100'}`}>
-                      + Upload File
-                      <input type="file" multiple className="hidden" accept=".pdf,.png,.jpg,.jpeg" onChange={handleFileChange} disabled={documents.length >= 4} />
-                    </label>
+                {formData.role === 'TRAINER' && (
+                  <div>
+                    <RequiredLabel>Date of Joining</RequiredLabel>
+                    <input
+                      type="date"
+                      required
+                      value={formData.joiningDate}
+                      onChange={(e) => setFormData({ ...formData, joiningDate: e.target.value })}
+                      className="w-full border border-slate-200 rounded-lg p-2.5"
+                    />
                   </div>
+                )}
 
-                  {documents.length > 0 && (
-                    <div className="space-y-3 mt-3">
-                      {documents.map((doc, index) => (
-                        <div key={index} className="flex gap-3 items-center bg-slate-50 p-3 rounded-lg border border-slate-200">
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-slate-800 truncate">{doc.file.name}</p>
-                            <p className="text-xs text-slate-500">{(doc.file.size / 1024).toFixed(1)} KB</p>
-                          </div>
-                          <div className="flex-1">
-                            <input
-                              type="text"
-                              placeholder="Add a remark..."
-                              value={doc.remark}
-                              onChange={(e) => updateDocumentRemark(index, e.target.value)}
-                              className="w-full text-sm border border-slate-200 rounded p-1.5"
-                            />
-                          </div>
-                          <button type="button" onClick={() => removeDocument(index)} className="text-slate-400 hover:text-red-500 p-1">
-                            <X size={16} />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
+                {formData.role === 'STUDENT' && (
+                  <div>
+                    <RequiredLabel>Total Fees</RequiredLabel>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      required
+                      value={formData.totalAmount}
+                      onChange={(e) => setFormData({ ...formData, totalAmount: e.target.value })}
+                      className="w-full border border-slate-200 rounded-lg p-2.5"
+                      placeholder="0.00"
+                    />
+                  </div>
+                )}
+
               </form>
             </div>
 
@@ -671,7 +793,7 @@ export default function Users() {
                 <input type="email" value={editForm.email} onChange={(e) => setEditForm((p) => ({ ...p, email: e.target.value }))} className="w-full border border-slate-200 rounded-lg p-2.5" required />
               </div>
               <div className="grid grid-cols-2 gap-4">
-                <input value={editForm.phone} onChange={(e) => setEditForm((p) => ({ ...p, phone: e.target.value }))} placeholder="Mobile Number" className="w-full border border-slate-200 rounded-lg p-2.5" />
+                <input value={editForm.phone} onChange={(e) => setEditForm((p) => ({ ...p, phone: sanitizePhone(e.target.value) }))} placeholder="Mobile Number" className="w-full border border-slate-200 rounded-lg p-2.5" />
                 <input value={editForm.location} onChange={(e) => setEditForm((p) => ({ ...p, location: e.target.value }))} placeholder="Location" className="w-full border border-slate-200 rounded-lg p-2.5" />
               </div>
               <div className="grid grid-cols-2 gap-4">
@@ -689,6 +811,80 @@ export default function Users() {
                 </button>
                 <button type="submit" disabled={editing} className="flex-1 px-4 py-2.5 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition-colors flex justify-center items-center">
                   {editing ? <Loader2 className="animate-spin" /> : 'Update User'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {isUploadModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden">
+            <div className="flex justify-between items-center p-6 border-b border-slate-100">
+              <h2 className="text-xl font-bold text-slate-800">Upload Documents</h2>
+              <button onClick={() => setIsUploadModalOpen(false)} className="text-slate-400 hover:text-slate-600">
+                <X size={24} />
+              </button>
+            </div>
+            <form onSubmit={submitUploadDocuments} className="p-6 space-y-4">
+              {uploadRows.map((row, index) => (
+                <div key={index} className="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-3 items-end rounded-xl border border-slate-100 p-4">
+                  <div>
+                    <RequiredLabel>Document Name</RequiredLabel>
+                    <input
+                      type="text"
+                      required
+                      value={row.documentName}
+                      onChange={(e) => updateUploadRow(index, { documentName: e.target.value })}
+                      className="w-full border border-slate-200 rounded-lg p-2.5"
+                      placeholder="Aadhar, License, ID Card..."
+                    />
+                  </div>
+                  <div>
+                    <RequiredLabel>Upload File</RequiredLabel>
+                    <input
+                      type="file"
+                      required
+                      accept=".pdf,.png,.jpg,.jpeg"
+                      onChange={(e) => updateUploadRow(index, { file: e.target.files?.[0] || null })}
+                      className="w-full border border-slate-200 rounded-lg p-2.5"
+                    />
+                    <p className="text-xs text-slate-400 mt-1">Max file size: 1MB per document</p>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={uploadRows.length === 1}
+                    onClick={() => removeUploadRow(index)}
+                    className="h-10 px-3 rounded-lg border border-slate-200 text-slate-500 hover:text-red-600 hover:border-red-200 disabled:opacity-40"
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+
+              <button
+                type="button"
+                onClick={addUploadRow}
+                className="text-sm font-medium text-emerald-700 hover:text-emerald-800"
+              >
+                + Add More Document
+              </button>
+
+              <div className="pt-2 flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setIsUploadModalOpen(false)}
+                  className="flex-1 px-4 py-2.5 border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={uploadingDocs}
+                  className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors flex justify-center items-center"
+                >
+                  {uploadingDocs ? <Loader2 className="animate-spin" /> : 'Upload Documents'}
                 </button>
               </div>
             </form>
@@ -779,6 +975,22 @@ export default function Users() {
                           <p className="text-slate-400">Date of Birth</p>
                           <p className="text-slate-800 font-medium">
                             {userDetails.dateOfBirth ? new Date(userDetails.dateOfBirth).toLocaleDateString() : '-'}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-slate-400">Admission Date</p>
+                          <p className="text-slate-800 font-medium">
+                            {userDetails.admissionDate ? new Date(userDetails.admissionDate).toLocaleDateString() : '-'}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-slate-400">Class Type</p>
+                          <p className="text-slate-800 font-medium">{userDetails.classType || '-'}</p>
+                        </div>
+                        <div>
+                          <p className="text-slate-400">Joining Date</p>
+                          <p className="text-slate-800 font-medium">
+                            {userDetails.joiningDate ? new Date(userDetails.joiningDate).toLocaleDateString() : '-'}
                           </p>
                         </div>
                         {userDetails.role === 'STUDENT' && (

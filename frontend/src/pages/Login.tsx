@@ -194,7 +194,7 @@ export default function Login() {
         <div className="w-full max-w-md">
           <div className="mb-8">
             <h1 className="text-4xl font-bold text-slate-900 mb-2 flex items-center gap-3">
-              <span className="bg-emerald-500 text-white p-2 rounded-xl text-2xl">DF</span> DriveFlow
+              <span className="bg-emerald-500 text-white p-2 rounded-xl text-2xl">DS</span> drivingsync
             </h1>
             <p className="text-slate-500 text-lg">Sign in to your account to continue.</p>
           </div>
@@ -221,7 +221,7 @@ export default function Login() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="pl-10 w-full border border-slate-300 rounded-xl py-3 px-4 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-colors"
-                  placeholder="admin@driveflow.com"
+                  placeholder="admin@drivingsync.com"
                   required
                 />
               </div>

@@ -37,6 +37,9 @@ model User {
   phone          String?
   location       String?
   dateOfBirth    DateTime?
+  admissionDate  DateTime?
+  classType      String?
+  joiningDate    DateTime?
   status         UserStatus      @default(ACTIVE)
   createdAt      DateTime        @default(now())
   school         School          @relation(fields: [schoolId], references: [id])

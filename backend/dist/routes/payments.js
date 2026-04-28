@@ -87,12 +87,22 @@ router.post('/', async (req, res) => {
             return res.status(400).json({ error: 'Cannot record payment because the amount is invalid.' });
         }
         let resolvedStudentId = String(studentId);
-        const studentByUserId = await prisma.studentProfile.findUnique({ where: { userId: resolvedStudentId } });
+        const studentByUserId = await prisma.studentProfile.findFirst({
+            where: {
+                userId: resolvedStudentId,
+                user: { schoolId: authUser.schoolId, role: 'STUDENT' }
+            }
+        });
         if (studentByUserId) {
             resolvedStudentId = studentByUserId.id;
         }
         else {
-            const directProfile = await prisma.studentProfile.findUnique({ where: { id: resolvedStudentId } });
+            const directProfile = await prisma.studentProfile.findFirst({
+                where: {
+                    id: resolvedStudentId,
+                    user: { schoolId: authUser.schoolId, role: 'STUDENT' }
+                }
+            });
             if (!directProfile) {
                 return res.status(400).json({ error: 'Student profile not found for the given ID' });
             }
@@ -121,6 +131,7 @@ router.post('/', async (req, res) => {
         res.status(201).json({
             message: `Collected ${result.payment.amount.toFixed(2)} from ${result.payment.student.user.firstName} ${result.payment.student.user.lastName}. Remaining balance: ${Math.max(result.updatedProfile.balanceDue, 0).toFixed(2)}.`,
             payment: result.payment,
+            studentProfile: result.updatedProfile,
             collectedAmount: result.payment.status === 'PAID' ? result.payment.amount : 0,
             remainingAmount: Math.max(result.updatedProfile.balanceDue, 0)
         });

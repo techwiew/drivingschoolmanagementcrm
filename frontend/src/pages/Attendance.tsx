@@ -9,6 +9,17 @@ type Notice = { type: 'success' | 'error'; text: string } | null;
 const getErrorMessage = (err: any, fallback: string) =>
   err.response?.data?.error || err.response?.data?.details || err.message || fallback;
 
+const markScheduleCompletedWithFallback = async (scheduleId: string) => {
+  try {
+    return await api.patch(`/schedules/${scheduleId}/status`, { status: 'COMPLETED' });
+  } catch (err: any) {
+    if (err.response?.status === 403 || err.response?.status === 405) {
+      return api.post(`/schedules/${scheduleId}/status/update`, { status: 'COMPLETED' });
+    }
+    throw err;
+  }
+};
+
 export default function Attendance() {
   const { user } = useAuthStore();
   const [schedules, setSchedules] = useState<any[]>([]);
@@ -84,7 +95,7 @@ export default function Attendance() {
       }));
 
       await api.post(`/schedules/${scheduleId}/attendance`, { attendance });
-      await api.patch(`/schedules/${scheduleId}/status`, { status: 'COMPLETED' });
+      await markScheduleCompletedWithFallback(scheduleId);
 
       await fetchSchedules();
       const savedCount = attendance.length;

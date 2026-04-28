@@ -10,7 +10,14 @@ import {
   ClipboardList
 } from 'lucide-react';
 
-export default function Sidebar() {
+type SidebarProps = {
+  mobile?: boolean;
+  isOpen?: boolean;
+  onClose?: () => void;
+  onDesktopReload?: () => void;
+};
+
+export default function Sidebar({ mobile = false, isOpen = true, onClose, onDesktopReload }: SidebarProps) {
   const { user, logout } = useAuthStore();
 
   const getNavItems = () => {
@@ -44,11 +51,17 @@ export default function Sidebar() {
     }
   };
 
+  const sidebarClasses = mobile
+    ? `fixed inset-y-0 left-0 z-50 w-72 max-w-[85vw] bg-slate-900 text-white flex flex-col transition-transform duration-300 ${
+        isOpen ? 'translate-x-0' : '-translate-x-full'
+      }`
+    : 'w-64 bg-slate-900 text-white min-h-screen flex flex-col transition-all duration-300';
+
   return (
-    <div className="w-64 bg-slate-900 text-white min-h-screen flex flex-col transition-all duration-300">
+    <div className={sidebarClasses}>
       <div className="p-6">
         <h1 className="text-2xl font-bold text-emerald-400 flex items-center gap-2">
-          <span className="bg-emerald-500/20 p-2 rounded-lg">🚘</span> DriveFlow
+          <span className="bg-emerald-500/20 p-2 rounded-lg">🚘</span> drivingsync
         </h1>
         <div className="mt-6 p-4 bg-slate-800 rounded-xl border border-slate-700">
           <p className="text-sm text-slate-400">Welcome,</p>
@@ -62,6 +75,7 @@ export default function Sidebar() {
           <NavLink
             key={item.path}
             to={item.path}
+            onClick={mobile ? onClose : undefined}
             className={({ isActive }) =>
               `flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 ${
                 isActive
@@ -79,7 +93,7 @@ export default function Sidebar() {
       <div className="p-4">
         <div className="p-3 bg-slate-800 rounded-xl mb-3 border border-slate-700">
           <p className="text-xs text-slate-500">School</p>
-          <p className="text-sm text-slate-300 font-medium truncate">{user?.schoolName || 'DriveFlow Academy'}</p>
+          <p className="text-sm text-slate-300 font-medium truncate">{user?.schoolName || 'drivingsync Academy'}</p>
         </div>
         <button
           onClick={logout}
@@ -88,6 +102,15 @@ export default function Sidebar() {
           <LogOut size={20} />
           <span className="font-medium">Logout</span>
         </button>
+        {mobile && (
+          <button
+            type="button"
+            onClick={onDesktopReload}
+            className="mt-2 flex items-center justify-center gap-2 w-full px-4 py-2.5 text-slate-300 hover:bg-slate-700 rounded-xl transition-colors duration-200 text-sm"
+          >
+            Desktop Site
+          </button>
+        )}
       </div>
     </div>
   );
