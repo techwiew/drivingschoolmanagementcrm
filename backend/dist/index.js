@@ -620,82 +620,109 @@ app.post('/api/users', requireRoles('ADMIN'), async (req, res) => {
         res.status(500).json({ error: 'Failed to create user', details: error.message });
     }
 });
+const updateUserById = async (schoolId, targetUserId, payload) => {
+    const target = await prisma.user.findFirst({
+        where: { id: targetUserId, schoolId }
+    });
+    if (!target)
+        return { status: 404, body: { error: 'User not found' } };
+    const { firstName, lastName, email, phone, location, dateOfBirth, status, password, admissionDate, classType, joiningDate } = payload || {};
+    const data = {};
+    if (typeof firstName === 'string')
+        data.firstName = firstName;
+    if (typeof lastName === 'string')
+        data.lastName = lastName;
+    if (typeof email === 'string')
+        data.email = email;
+    if (typeof phone === 'string') {
+        const incomingPhone = phone.trim();
+        const existingPhone = (target.phone || '').trim();
+        // Keep legacy values untouched when phone wasn't edited, so date-only edits don't fail.
+        if (incomingPhone === existingPhone) {
+            data.phone = target.phone;
+        }
+        else if (incomingPhone === '') {
+            data.phone = null;
+        }
+        else {
+            const parsedPhone = normalizeTenDigitMobile(incomingPhone);
+            if (!parsedPhone.ok) {
+                return { status: 400, body: { error: parsedPhone.error } };
+            }
+            data.phone = parsedPhone.value;
+        }
+    }
+    if (typeof location === 'string')
+        data.location = location;
+    if (typeof status === 'string' && ['ACTIVE', 'LOCKED'].includes(status))
+        data.status = status;
+    if (dateOfBirth) {
+        const parsedDob = parseAdultDateOfBirth(dateOfBirth);
+        if (!parsedDob.ok) {
+            return { status: 400, body: { error: parsedDob.error } };
+        }
+        data.dateOfBirth = parsedDob.value;
+    }
+    if (admissionDate !== undefined) {
+        const parsedAdmissionDate = parseOptionalDate(admissionDate, 'Admission date');
+        if (!parsedAdmissionDate.ok) {
+            return { status: 400, body: { error: parsedAdmissionDate.error } };
+        }
+        data.admissionDate = parsedAdmissionDate.value;
+    }
+    if (classType !== undefined) {
+        data.classType = typeof classType === 'string' ? classType.trim() || null : null;
+    }
+    if (joiningDate !== undefined) {
+        const parsedJoiningDate = parseOptionalDate(joiningDate, 'Joining date');
+        if (!parsedJoiningDate.ok) {
+            return { status: 400, body: { error: parsedJoiningDate.error } };
+        }
+        data.joiningDate = parsedJoiningDate.value;
+    }
+    if (password)
+        data.passwordHash = await bcrypt_1.default.hash(password, 10);
+    const updated = await prisma.user.update({
+        where: { id: target.id },
+        data,
+        select: {
+            id: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+            role: true,
+            status: true,
+            phone: true,
+            location: true,
+            dateOfBirth: true,
+            admissionDate: true,
+            classType: true,
+            joiningDate: true,
+            createdAt: true
+        }
+    });
+    return { status: 200, body: { message: 'User updated', user: updated } };
+};
 app.put('/api/users/:id', requireRoles('ADMIN'), async (req, res) => {
     try {
         const authUser = getSchoolUserOrFail(req, res);
         if (!authUser)
             return;
-        const targetUserId = String(req.params.id);
-        const target = await prisma.user.findFirst({
-            where: { id: targetUserId, schoolId: authUser.schoolId }
-        });
-        if (!target)
-            return res.status(404).json({ error: 'User not found' });
-        const { firstName, lastName, email, phone, location, dateOfBirth, status, password, admissionDate, classType, joiningDate } = req.body;
-        const data = {};
-        if (typeof firstName === 'string')
-            data.firstName = firstName;
-        if (typeof lastName === 'string')
-            data.lastName = lastName;
-        if (typeof email === 'string')
-            data.email = email;
-        if (typeof phone === 'string') {
-            const parsedPhone = normalizeTenDigitMobile(phone);
-            if (!parsedPhone.ok) {
-                return res.status(400).json({ error: parsedPhone.error });
-            }
-            data.phone = parsedPhone.value;
-        }
-        if (typeof location === 'string')
-            data.location = location;
-        if (typeof status === 'string' && ['ACTIVE', 'LOCKED'].includes(status))
-            data.status = status;
-        if (dateOfBirth) {
-            const parsedDob = parseAdultDateOfBirth(dateOfBirth);
-            if (!parsedDob.ok) {
-                return res.status(400).json({ error: parsedDob.error });
-            }
-            data.dateOfBirth = parsedDob.value;
-        }
-        if (admissionDate !== undefined) {
-            const parsedAdmissionDate = parseOptionalDate(admissionDate, 'Admission date');
-            if (!parsedAdmissionDate.ok) {
-                return res.status(400).json({ error: parsedAdmissionDate.error });
-            }
-            data.admissionDate = parsedAdmissionDate.value;
-        }
-        if (classType !== undefined) {
-            data.classType = typeof classType === 'string' ? classType.trim() || null : null;
-        }
-        if (joiningDate !== undefined) {
-            const parsedJoiningDate = parseOptionalDate(joiningDate, 'Joining date');
-            if (!parsedJoiningDate.ok) {
-                return res.status(400).json({ error: parsedJoiningDate.error });
-            }
-            data.joiningDate = parsedJoiningDate.value;
-        }
-        if (password)
-            data.passwordHash = await bcrypt_1.default.hash(password, 10);
-        const updated = await prisma.user.update({
-            where: { id: target.id },
-            data,
-            select: {
-                id: true,
-                email: true,
-                firstName: true,
-                lastName: true,
-                role: true,
-                status: true,
-                phone: true,
-                location: true,
-                dateOfBirth: true,
-                admissionDate: true,
-                classType: true,
-                joiningDate: true,
-                createdAt: true
-            }
-        });
-        res.json({ message: 'User updated', user: updated });
+        const result = await updateUserById(authUser.schoolId, String(req.params.id), req.body);
+        res.status(result.status).json(result.body);
+    }
+    catch (error) {
+        res.status(500).json({ error: 'Failed to update user', details: error.message });
+    }
+});
+// Fallback for hosting environments that block PUT at edge level.
+app.post('/api/users/:id/update', requireRoles('ADMIN'), async (req, res) => {
+    try {
+        const authUser = getSchoolUserOrFail(req, res);
+        if (!authUser)
+            return;
+        const result = await updateUserById(authUser.schoolId, String(req.params.id), req.body);
+        res.status(result.status).json(result.body);
     }
     catch (error) {
         res.status(500).json({ error: 'Failed to update user', details: error.message });

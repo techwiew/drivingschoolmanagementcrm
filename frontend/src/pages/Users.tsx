@@ -283,6 +283,7 @@ export default function Users() {
   };
 
   const openEditModal = (target: UserData) => {
+    setNotice(null);
     setEditForm({
       id: target.id,
       firstName: target.firstName || '',
@@ -319,7 +320,15 @@ export default function Users() {
       };
       if (editForm.password.trim()) payload.password = editForm.password;
 
-      await api.put(`/users/${editForm.id}`, payload);
+      try {
+        await api.put(`/users/${editForm.id}`, payload);
+      } catch (err: any) {
+        if (err.response?.status === 403 || err.response?.status === 405) {
+          await api.post(`/users/${editForm.id}/update`, payload);
+        } else {
+          throw err;
+        }
+      }
       setIsEditModalOpen(false);
       setNotice({ type: 'success', text: `${editForm.firstName} ${editForm.lastName} was updated successfully.` });
       fetchUsers();
@@ -352,6 +361,7 @@ export default function Users() {
   };
 
   const openUploadModal = () => {
+    setNotice(null);
     setUploadRows([{ documentName: '', file: null }]);
     setIsUploadModalOpen(true);
   };
