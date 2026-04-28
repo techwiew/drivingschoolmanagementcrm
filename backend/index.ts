@@ -34,7 +34,7 @@ declare global {
 const app = express();
 const prisma = new PrismaClient();
 const PORT = process.env.PORT || 5000;
-const JWT_SECRET = process.env.JWT_SECRET || 'driveflow-secret-2024';
+const JWT_SECRET = process.env.JWT_SECRET || 'drivingsync-secret-2024';
 
 const corsOptions: CorsOptions = {
   origin: true,
@@ -170,7 +170,7 @@ const calculateAge = (dateOfBirth: Date | null | undefined) => {
 // -----------------------------------------
 
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'OK', message: 'drivingsync API is running' });
+  res.json({ status: 'OK', message: 'Driving Sync API is running' });
 });
 
 app.post('/api/super-admin/login', async (req, res) => {
@@ -348,7 +348,7 @@ app.post('/api/setup', async (req, res) => {
     }
 
     const school = await prisma.school.create({
-      data: { name: 'drivingsync Academy', contactEmail: 'admin@drivingsync.com' }
+      data: { name: 'Driving Sync Academy', contactEmail: 'admin@drivingsync.com' }
     });
 
     const [adminHash, trainerHash, studentHash] = await Promise.all([
@@ -1362,3 +1362,4 @@ app.use((req, res) => {
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });
+

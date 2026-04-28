@@ -14,7 +14,7 @@ export default function PublicLayout() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col md:flex-row justify-between items-center gap-6">
             <div className="text-slate-500 text-xs font-medium">
-              &copy; {new Date().getFullYear()} drivingsync Management System. Built for high-velocity operations.
+              &copy; {new Date().getFullYear()} Driving Sync Management System. Built for high-velocity operations.
             </div>
             <div className="flex gap-8 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
               <a href="#" className="hover:text-slate-900 transition-colors">Privacy</a>
@@ -28,3 +28,4 @@ export default function PublicLayout() {
     </div>
   );
 }
+

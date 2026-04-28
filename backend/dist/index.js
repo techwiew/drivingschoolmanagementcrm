@@ -20,7 +20,7 @@ dotenv_1.default.config();
 const app = (0, express_1.default)();
 const prisma = new client_1.PrismaClient();
 const PORT = process.env.PORT || 5000;
-const JWT_SECRET = process.env.JWT_SECRET || 'driveflow-secret-2024';
+const JWT_SECRET = process.env.JWT_SECRET || 'drivingsync-secret-2024';
 const corsOptions = {
     origin: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
@@ -137,7 +137,7 @@ const calculateAge = (dateOfBirth) => {
 // PUBLIC ROUTES
 // -----------------------------------------
 app.get('/api/health', (req, res) => {
-    res.json({ status: 'OK', message: 'drivingsync API is running' });
+    res.json({ status: 'OK', message: 'Driving Sync API is running' });
 });
 app.post('/api/super-admin/login', async (req, res) => {
     try {
@@ -277,7 +277,7 @@ app.post('/api/setup', async (req, res) => {
             return res.json({ message: 'Setup already complete. Use the existing credentials to log in.' });
         }
         const school = await prisma.school.create({
-            data: { name: 'drivingsync Academy', contactEmail: 'admin@drivingsync.com' }
+            data: { name: 'Driving Sync Academy', contactEmail: 'admin@drivingsync.com' }
         });
         const [adminHash, trainerHash, studentHash] = await Promise.all([
             bcrypt_1.default.hash('Admin@123', 10),

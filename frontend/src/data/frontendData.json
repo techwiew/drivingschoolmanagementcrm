@@ -65,7 +65,7 @@
     "story": {
       "title": "Built by Experts for Experts",
       "paragraphs": [
-        "drivingsync was founded with a simple goal: to eliminate the paperwork and administrative headaches that slow down driving schools. We understand the unique challenges of managing instructors, vehicles, and student schedules.",
+        "Driving Sync was founded with a simple goal: to eliminate the paperwork and administrative headaches that slow down driving schools. We understand the unique challenges of managing instructors, vehicles, and student schedules.",
         "Our team consists of industry veterans and tech enthusiasts who are passionate about road safety and educational technology. We're constantly innovating to stay ahead of the curve."
       ],
       "points": [
@@ -171,7 +171,7 @@
     "header": {
       "label": "Contact Us",
       "title": "Let's scale your school's efficiency.",
-      "description": "Our team of experts is ready to show you how drivingsync can transform your logistics and student management through high-velocity automation."
+      "description": "Our team of experts is ready to show you how Driving Sync can transform your logistics and student management through high-velocity automation."
     },
     "contactInfo": {
       "hq": {
@@ -191,4 +191,5 @@
     }
   }
 }
+
 

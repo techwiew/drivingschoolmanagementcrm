@@ -1,4 +1,4 @@
--- drivingsync / Driving School Portal
+-- Driving Sync / Driving School Portal
 -- MySQL schema export for phpMyAdmin / MilesWeb
 -- Recommended: run this on a fresh empty database.
 -- For existing databases, ensure these columns exist on `User`:
@@ -225,3 +225,4 @@ CREATE TABLE IF NOT EXISTS `Document` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 SET FOREIGN_KEY_CHECKS = 1;
+

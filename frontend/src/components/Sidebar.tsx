@@ -61,7 +61,7 @@ export default function Sidebar({ mobile = false, isOpen = true, onClose, onDesk
     <div className={sidebarClasses}>
       <div className="p-6">
         <h1 className="text-2xl font-bold text-emerald-400 flex items-center gap-2">
-          <span className="bg-emerald-500/20 p-2 rounded-lg">🚘</span> drivingsync
+          <span className="bg-emerald-500/20 p-2 rounded-lg">🚘</span> Driving Sync
         </h1>
         <div className="mt-6 p-4 bg-slate-800 rounded-xl border border-slate-700">
           <p className="text-sm text-slate-400">Welcome,</p>
@@ -93,7 +93,7 @@ export default function Sidebar({ mobile = false, isOpen = true, onClose, onDesk
       <div className="p-4">
         <div className="p-3 bg-slate-800 rounded-xl mb-3 border border-slate-700">
           <p className="text-xs text-slate-500">School</p>
-          <p className="text-sm text-slate-300 font-medium truncate">{user?.schoolName || 'drivingsync Academy'}</p>
+          <p className="text-sm text-slate-300 font-medium truncate">{user?.schoolName || 'Driving Sync Academy'}</p>
         </div>
         <button
           onClick={logout}
@@ -115,3 +115,4 @@ export default function Sidebar({ mobile = false, isOpen = true, onClose, onDesk
     </div>
   );
 }
+

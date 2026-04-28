@@ -123,7 +123,7 @@ export default function Home() {
               Ready to Transform Your Driving School?
             </h2>
             <p className="text-slate-400 text-xl mb-10 max-w-2xl mx-auto relative z-10">
-              Join hundreds of schools that have already modernized their management with drivingsync.
+              Join hundreds of schools that have already modernized their management with Driving Sync.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center relative z-10">
               <Link
@@ -145,3 +145,4 @@ export default function Home() {
     </div>
   );
 }
+

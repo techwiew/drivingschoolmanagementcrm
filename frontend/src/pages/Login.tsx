@@ -194,7 +194,7 @@ export default function Login() {
         <div className="w-full max-w-md">
           <div className="mb-8">
             <h1 className="text-4xl font-bold text-slate-900 mb-2 flex items-center gap-3">
-              <span className="bg-emerald-500 text-white p-2 rounded-xl text-2xl">DS</span> drivingsync
+              <span className="bg-emerald-500 text-white p-2 rounded-xl text-2xl">DS</span> Driving Sync
             </h1>
             <p className="text-slate-500 text-lg">Sign in to your account to continue.</p>
           </div>
@@ -423,3 +423,4 @@ export default function Login() {
     </div>
   );
 }
+

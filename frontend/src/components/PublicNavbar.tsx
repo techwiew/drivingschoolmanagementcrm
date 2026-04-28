@@ -38,7 +38,7 @@ export default function PublicNavbar() {
             <span className={`text-2xl font-bold transition-colors ${
               isScrolled ? 'text-slate-900' : 'text-slate-900'
             }`}>
-              drivingsync
+              Driving Sync
             </span>
           </Link>
 
@@ -148,3 +148,4 @@ export default function PublicNavbar() {
     </nav>
   );
 }
+

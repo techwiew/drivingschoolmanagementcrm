@@ -46,7 +46,7 @@ INSERT INTO `SuperAdmin` (`id`, `name`, `email`, `mobile`, `passwordHash`, `stat
 VALUES (
   'super-admin-001',
   'Platform Super Admin',
-  'superadmin@driveflow.com',
+  'superadmin@drivingsync.com',
   '9999990000',
   '$2b$10$6ixXsWLAMKLJq.sEuGlQZO70JttXinVd33u8z2M5TfQccVzlMQ0dm',
   'ACTIVE',
@@ -136,3 +136,4 @@ INSERT INTO `StudentProfile` (`id`, `userId`, `licenseStatus`, `totalPaid`, `bal
 VALUES ('student-profile-001', 'student-user-001', 'Pending', 0, 0)
 ON DUPLICATE KEY UPDATE
   `licenseStatus` = VALUES(`licenseStatus`);
+
