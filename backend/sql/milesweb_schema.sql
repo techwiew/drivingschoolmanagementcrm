@@ -1,6 +1,8 @@
--- DriveFlow / Driving School Portal
+-- drivingsync / Driving School Portal
 -- MySQL schema export for phpMyAdmin / MilesWeb
 -- Recommended: run this on a fresh empty database.
+-- For existing databases, ensure these columns exist on `User`:
+-- `admissionDate` DATETIME(3) NULL, `classType` VARCHAR(191) NULL, `joiningDate` DATETIME(3) NULL
 
 SET NAMES utf8mb4;
 SET FOREIGN_KEY_CHECKS = 0;
