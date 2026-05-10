@@ -224,5 +224,18 @@ CREATE TABLE IF NOT EXISTS `Document` (
     ON DELETE RESTRICT ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS `DemoRequest` (
+  `id` VARCHAR(191) NOT NULL,
+  `fullName` VARCHAR(191) NOT NULL,
+  `schoolName` VARCHAR(191) NOT NULL,
+  `workEmail` VARCHAR(191) NOT NULL,
+  `phoneNumber` VARCHAR(191) NULL,
+  `preferredDate` DATETIME(3) NOT NULL,
+  `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  PRIMARY KEY (`id`),
+  KEY `DemoRequest_createdAt_idx` (`createdAt`),
+  KEY `DemoRequest_workEmail_idx` (`workEmail`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 SET FOREIGN_KEY_CHECKS = 1;
 

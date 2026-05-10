@@ -4,7 +4,11 @@ import data from '../data/frontendData.json';
 import { resolveIcon } from '../utils/iconResolver';
 
 export default function Home() {
-  const { hero, stats, features } = data.home;
+  const { hero, stats, features } = data.home as {
+    hero: { badge: string; description: string; dashboardImage: string };
+    stats: Array<{ label: string; value: string }>;
+    features: Array<{ title: string; desc: string; icon: string; bg: string; iconColor: string }>;
+  };
 
   return (
     <div className="pt-20">
@@ -72,18 +76,20 @@ export default function Home() {
       </section>
 
       {/* Stats Section */}
-      <section className="py-12 bg-white border-y border-slate-100">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
-            {stats.map((stat, i) => (
-              <div key={i}>
-                <div className="text-3xl font-bold text-slate-900">{stat.value}</div>
-                <div className="text-slate-500 text-sm mt-1">{stat.label}</div>
-              </div>
-            ))}
+      {stats.length > 0 && (
+        <section className="py-12 bg-white border-y border-slate-100">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
+              {stats.map((stat, i) => (
+                <div key={i}>
+                  <div className="text-3xl font-bold text-slate-900">{stat.value}</div>
+                  <div className="text-slate-500 text-sm mt-1">{stat.label}</div>
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       {/* Features Grid */}
       <section className="py-24 bg-white" id="features">

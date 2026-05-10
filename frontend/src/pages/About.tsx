@@ -3,7 +3,17 @@ import data from '../data/frontendData.json';
 import { resolveIcon } from '../utils/iconResolver';
 
 export default function About() {
-  const { hero, story, values } = data.about;
+  const { hero, story, values } = data.about as {
+    hero: { title: string; description: string };
+    story: {
+      title: string;
+      paragraphs: string[];
+      points: string[];
+      experience: { value: string; label: string } | null;
+      image: string;
+    };
+    values: Array<{ title: string; desc: string; icon: string; iconColor: string }>;
+  };
 
   return (
     <div className="pt-20">
@@ -27,10 +37,12 @@ export default function About() {
                 alt="Our Team"
                 className="rounded-3xl shadow-2xl"
               />
-              <div className="absolute -bottom-8 -right-8 bg-emerald-500 text-white p-8 rounded-2xl shadow-xl hidden sm:block">
-                <div className="text-4xl font-bold">{story.experience.value}</div>
-                <div className="text-sm font-medium opacity-80">{story.experience.label}</div>
-              </div>
+              {story.experience && (
+                <div className="absolute -bottom-8 -right-8 bg-emerald-500 text-white p-8 rounded-2xl shadow-xl hidden sm:block">
+                  <div className="text-4xl font-bold">{story.experience.value}</div>
+                  <div className="text-sm font-medium opacity-80">{story.experience.label}</div>
+                </div>
+              )}
             </div>
             <div>
               <h2 className="text-3xl font-bold text-slate-900 mb-6">{story.title}</h2>

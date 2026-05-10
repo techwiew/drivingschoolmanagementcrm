@@ -193,6 +193,19 @@ model Document {
   user         User     @relation(fields: [userId], references: [id])
 }
 
+model DemoRequest {
+  id            String   @id @default(uuid())
+  fullName      String
+  schoolName    String
+  workEmail     String
+  phoneNumber   String?
+  preferredDate DateTime
+  createdAt     DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([workEmail])
+}
+
 model SuperAdmin {
   id           String     @id @default(uuid())
   name         String

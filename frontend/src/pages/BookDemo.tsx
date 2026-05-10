@@ -2,9 +2,12 @@ import { useState } from 'react';
 import { ArrowRight } from 'lucide-react';
 import data from '../data/frontendData.json';
 import { resolveIcon } from '../utils/iconResolver';
+import { api } from '../lib/axios';
+import { BOOK_DEMO_CONSTANTS } from '../constants/bookDemo';
 
 export default function BookDemo() {
   const { header, contactInfo, testimonial } = data.bookDemo;
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     fullName: '',
     schoolName: '',
@@ -13,10 +16,25 @@ export default function BookDemo() {
     preferredDate: '',
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('Demo request:', formData);
-    alert('Demo request submitted successfully! We will contact you soon.');
+    setIsSubmitting(true);
+    try {
+      await api.post(BOOK_DEMO_CONSTANTS.submitEndpoint, formData);
+      alert(BOOK_DEMO_CONSTANTS.successMessage);
+      setFormData({
+        fullName: '',
+        schoolName: '',
+        workEmail: '',
+        phoneNumber: '',
+        preferredDate: '',
+      });
+    } catch (error) {
+      console.error('Demo request submission failed:', error);
+      alert(BOOK_DEMO_CONSTANTS.failureMessage);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -58,10 +76,6 @@ export default function BookDemo() {
                 <div className="flex items-center gap-4 text-slate-600 hover:text-cyan-600 transition-colors cursor-pointer">
                   {resolveIcon('Mail', 20, 'text-blue-500')}
                   <span className="text-sm font-medium">{contactInfo.hq.email}</span>
-                </div>
-                <div className="flex items-center gap-4 text-slate-600 hover:text-cyan-600 transition-colors cursor-pointer">
-                  {resolveIcon('Phone', 20, 'text-blue-500')}
-                  <span className="text-sm font-medium">{contactInfo.hq.phone}</span>
                 </div>
                 <div className="flex items-center gap-4 text-slate-600 hover:text-cyan-600 transition-colors cursor-pointer">
                   {resolveIcon('MapPin', 20, 'text-blue-500')}
@@ -166,7 +180,7 @@ export default function BookDemo() {
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-sm font-bold text-slate-700">Preferred Date</label>
+                  <label className="text-sm font-bold text-slate-700">{BOOK_DEMO_CONSTANTS.preferredDateLabel}</label>
                   <div className="relative">
                     <input
                       type="date"
@@ -181,9 +195,10 @@ export default function BookDemo() {
                 <div className="pt-4">
                   <button
                     type="submit"
+                    disabled={isSubmitting}
                     className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl shadow-lg shadow-blue-500/20 transition-all flex items-center justify-center gap-3 group"
                   >
-                    Confirm Demo Request <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
+                    {isSubmitting ? 'Submitting...' : 'Confirm Demo Request'} <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
                   </button>
                   <p className="mt-6 text-[10px] text-slate-400 text-center">
                     By clicking confirm, you agree to our Terms of Service and Privacy Policy.

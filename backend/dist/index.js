@@ -13,9 +13,11 @@ const multer_1 = __importDefault(require("multer"));
 const path_1 = __importDefault(require("path"));
 const helmet_1 = __importDefault(require("helmet"));
 const compression_1 = __importDefault(require("compression"));
+const nodemailer_1 = __importDefault(require("nodemailer"));
 const schedule_1 = __importDefault(require("./routes/schedule"));
 const payments_1 = __importDefault(require("./routes/payments"));
 const mockTests_1 = __importDefault(require("./routes/mockTests"));
+const demoRequest_1 = require("./constants/demoRequest");
 dotenv_1.default.config();
 const app = (0, express_1.default)();
 const prisma = new client_1.PrismaClient();
@@ -133,11 +135,88 @@ const calculateAge = (dateOfBirth) => {
         age -= 1;
     return age;
 };
+const buildDemoRequestEmailText = (payload) => {
+    const preferredDateValue = payload.preferredDate.toISOString().split('T')[0];
+    return [
+        'A new demo request has been submitted.',
+        '',
+        `Full Name: ${payload.fullName}`,
+        `School Name: ${payload.schoolName}`,
+        `Work Email: ${payload.workEmail}`,
+        `Phone Number: ${payload.phoneNumber || 'Not provided'}`,
+        `Preferred Date for call: ${preferredDateValue}`
+    ].join('\n');
+};
+const createDemoRequestTransporter = () => {
+    const host = process.env.DEMO_SMTP_HOST;
+    const user = process.env.DEMO_SMTP_USER;
+    const pass = process.env.DEMO_SMTP_PASS;
+    const port = Number(process.env.DEMO_SMTP_PORT || 587);
+    if (!host || !user || !pass) {
+        return null;
+    }
+    return nodemailer_1.default.createTransport({
+        host,
+        port,
+        secure: port === 465,
+        auth: { user, pass }
+    });
+};
+const sendDemoRequestEmail = async (payload) => {
+    const transporter = createDemoRequestTransporter();
+    if (!transporter)
+        return false;
+    const receiverEmail = process.env.DEMO_REQUEST_RECEIVER_EMAIL
+        ? process.env.DEMO_REQUEST_RECEIVER_EMAIL.split(',').map((email) => email.trim()).filter(Boolean)
+        : [...demoRequest_1.DEMO_REQUEST_CONSTANTS.fallbackReceiverEmails];
+    await transporter.sendMail({
+        from: process.env.DEMO_SMTP_FROM || demoRequest_1.DEMO_REQUEST_CONSTANTS.mailFrom,
+        to: receiverEmail,
+        subject: `${demoRequest_1.DEMO_REQUEST_CONSTANTS.emailSubjectPrefix} - ${payload.schoolName}`,
+        text: buildDemoRequestEmailText(payload)
+    });
+    return true;
+};
 // -----------------------------------------
 // PUBLIC ROUTES
 // -----------------------------------------
 app.get('/api/health', (req, res) => {
     res.json({ status: 'OK', message: 'Driving Sync API is running' });
+});
+app.post(demoRequest_1.DEMO_REQUEST_CONSTANTS.endpoint, async (req, res) => {
+    try {
+        const { fullName, schoolName, workEmail, phoneNumber, preferredDate } = req.body || {};
+        if (!fullName || !schoolName || !workEmail || !preferredDate) {
+            return res.status(400).json({ error: 'fullName, schoolName, workEmail and preferredDate are required' });
+        }
+        const parsedPreferredDate = new Date(String(preferredDate));
+        if (Number.isNaN(parsedPreferredDate.getTime())) {
+            return res.status(400).json({ error: demoRequest_1.DEMO_REQUEST_CONSTANTS.invalidDateError });
+        }
+        const payload = {
+            fullName: String(fullName).trim(),
+            schoolName: String(schoolName).trim(),
+            workEmail: String(workEmail).trim(),
+            phoneNumber: String(phoneNumber || '').trim() || null,
+            preferredDate: parsedPreferredDate
+        };
+        const created = await prisma.demoRequest.create({ data: payload });
+        let emailSent = false;
+        try {
+            emailSent = await sendDemoRequestEmail(payload);
+        }
+        catch (emailError) {
+            console.error('Failed to send demo request email:', emailError);
+        }
+        return res.status(201).json({
+            message: demoRequest_1.DEMO_REQUEST_CONSTANTS.submitSuccessMessage,
+            demoRequestId: created.id,
+            emailSent
+        });
+    }
+    catch (error) {
+        return res.status(500).json({ error: demoRequest_1.DEMO_REQUEST_CONSTANTS.submitError, details: error.message });
+    }
 });
 app.post('/api/super-admin/login', async (req, res) => {
     try {

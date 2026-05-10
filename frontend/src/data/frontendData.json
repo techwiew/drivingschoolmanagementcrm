@@ -13,12 +13,7 @@
       "description": "Everything you need to run your driving school in one place. From student enrollment to resource management and progress tracking.",
       "dashboardImage": "https://images.unsplash.com/photo-1460925895917-afdab827c52f?q=80&w=2026&auto=format&fit=crop"
     },
-    "stats": [
-      { "label": "Active Students", "value": "10k+" },
-      { "label": "Schools", "value": "500+" },
-      { "label": "Success Rate", "value": "98%" },
-      { "label": "Support", "value": "24/7" }
-    ],
+    "stats": [],
     "features": [
       {
         "title": "Student Tracking",
@@ -74,10 +69,7 @@
         "Data-driven insights",
         "Reliable and secure platform"
       ],
-      "experience": {
-        "value": "10+",
-        "label": "Years of Experience"
-      },
+      "experience": null,
       "image": "https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?q=80&w=2070&auto=format&fit=crop"
     },
     "values": [
@@ -175,11 +167,10 @@
     },
     "contactInfo": {
       "hq": {
-        "title": "Central HQ",
-        "location": "San Francisco, California",
-        "address": "123 Tech Lane, San Francisco",
-        "email": "info@drivingsync.com",
-        "phone": "+1 800-DRIVE-FLOW"
+        "title": "Pune HQ",
+        "location": "Blueridge IT Park",
+        "address": "Blueridge IT Park",
+        "email": "info@drivingsync.com"
       },
       "mapImage": "https://images.unsplash.com/photo-1524661135-423995f22d0b?q=80&w=2074&auto=format&fit=crop"
     },
